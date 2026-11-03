@@ -209,13 +209,8 @@ async function connect(all){
     if(!wr) throw new Error("找不到 fa02 寫入特徵值，請把紀錄裡「找到服務」那行截圖給開發者");
     await nt.startNotifications(); nt.addEventListener("characteristicvaluechanged", onNotify);
     setConn(true); connMsg("已連線","ok");
-    const n = new Date();
-    const r = await sendCmd("讀取裝置資訊",[8,0,1,0x80,n.getHours(),n.getMinutes(),n.getSeconds(),0]);
-    if(r && r.length>=5){
-      const t = r[4]; const map={132:"96×16",131:"64×16",130:"32×16",129:"32×32",128:"64×64",135:"144×16",136:"192×16",139:"96×32"};
-      const sz = map[t]||("未知型號 "+t);
-      log("裝置螢幕："+sz, sz==="96×16"?"ok":"bad");
-    }
+    // 不再自動送「讀取裝置資訊」：該指令最後一個 byte 是語言，送 0 會把遙控器內建動畫改成英文
+    log("已連線（未送語言設定，不影響遙控器內建動畫）","ok");
   }catch(e){
     const m = e.name==="NotFoundError" ? (all?"沒有選裝置，或附近找不到裝置。":"找不到 LED 開頭的裝置。請先完全關掉 iPixel Color App（它連著時 LED 不會被別人看到），再試；或改按「列出全部藍牙裝置」。")
             : e.message;
