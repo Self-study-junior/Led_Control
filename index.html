@@ -45,6 +45,11 @@ small{color:var(--mut)}
     <label>亮度 <input id="bri" type="range" min="1" max="100" value="60"></label>
     <span id="briV">60</span>
   </div>
+  <div class="row">
+    <label>遙控器動畫語言碼 <input type="number" id="lang" value="0" min="0" max="255" style="width:66px"></label>
+    <button class="sec act" id="bLang" disabled>套用</button>
+    <small>0＝英文（已確認）；其他值待測</small>
+  </div>
   <div id="connMsg" style="margin-top:6px"></div>
   <small id="support"></small>
 </section>
@@ -220,6 +225,12 @@ async function connect(all){
 $("bConnect").onclick = ()=>connect(false);
 $("bScanAll").onclick = ()=>connect(true);
 $("bDisc").onclick = ()=>{ dev?.gatt?.disconnect(); };
+$("bLang").onclick = async ()=>{
+  const L = Math.max(0,Math.min(255,+$("lang").value|0)), n = new Date();
+  const r = await sendCmd("設定語言碼 "+L,[8,0,1,0x80,n.getHours(),n.getMinutes(),n.getSeconds(),L]);
+  if(r && r.length>=5) log("裝置回應型號碼 "+r[4]+(r[4]===132?"（96×16）":""), "ok");
+  log("請按遙控器任一鍵，記下語言碼 "+L+" 出現的是哪套動畫");
+};
 $("bOn").onclick  = ()=>sendCmd("開機",[5,0,7,1,1]);
 $("bOff").onclick = ()=>sendCmd("關機",[5,0,7,1,0]);
 let briT; $("bri").oninput = e=>{ $("briV").textContent=e.target.value; clearTimeout(briT);
