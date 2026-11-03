@@ -22,6 +22,7 @@ input[type=color]{width:40px;height:34px;border:0;background:none;padding:0}
 label{color:var(--mut);font-size:13px}
 #status{font-weight:700}
 .ok{color:var(--ok)}.bad{color:var(--bad)}
+.gi{display:flex;gap:10px;align-items:center;margin:8px 0}.gi img{width:60%;image-rendering:pixelated;background:#000;border-radius:4px}.gi .nm{flex:1;font-size:13px}
 canvas.pv{width:100%;image-rendering:pixelated;background:#000;border-radius:4px;display:block}
 #log{background:#000;color:#9f9;font:12px/1.4 ui-monospace,Menlo,monospace;height:170px;overflow:auto;padding:8px;border-radius:8px;white-space:pre-wrap}
 small{color:var(--mut)}
@@ -85,7 +86,13 @@ small{color:var(--mut)}
 </section>
 
 <section>
-  <h2>3. 送圖片／GIF</h2>
+  <h2>圖庫（已設計好的 96×16）</h2>
+  <div id="gal"></div>
+  <small>要新增圖庫項目，把 96×16 的 GIF／PNG 放進 gallery/ 並登記到 gallery.json。</small>
+</section>
+
+<section>
+  <h2>3. 送自己的圖片／GIF</h2>
   <input type="file" id="file" accept="image/*">
   <div class="row">
     <label>非 96×16 的靜態圖：
@@ -361,6 +368,27 @@ $("file").onchange=async e=>{
 };
 $("fit").onchange=()=>{ if($("file").files[0]) $("file").onchange({target:$("file")}); };
 $("bSendImg").onclick=()=>{ if(!imgBytes) return log("先選一張圖","bad"); sendFile(imgBytes,imgIsGif); };
+
+// ===== 圖庫 =====
+(async()=>{
+  const box=$("gal");
+  try{
+    const list=await (await fetch("gallery/gallery.json",{cache:"no-store"})).json();
+    for(const it of list){
+      const d=document.createElement("div"); d.className="gi";
+      d.innerHTML=`<img alt=""><div class="nm"></div><button class="act" disabled>送出</button>`;
+      d.querySelector("img").src="gallery/"+it.file;
+      d.querySelector(".nm").textContent=it.name;
+      d.querySelector("button").onclick=async()=>{
+        const b=new Uint8Array(await (await fetch("gallery/"+it.file)).arrayBuffer());
+        const gif=b[0]===0x47&&b[1]===0x49&&b[2]===0x46;
+        log("圖庫："+it.name); await sendFile(b,gif);
+      };
+      box.appendChild(d);
+    }
+    if(wr) setBusy(false);
+  }catch(e){ box.textContent="圖庫載入失敗："+e.message; }
+})();
 
 makeText();
 log("就緒。按「連線 LED」，在清單中選 LED_BLE_ 開頭的裝置。");
