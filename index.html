@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>iPixel 繁中控制台</title>
+<style>
+:root{--bg:#1d1f24;--card:#2a2d34;--fg:#eee;--mut:#9aa0aa;--acc:#f5c400;--ok:#3ecf8e;--bad:#ff5a52}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif}
+main{max-width:640px;margin:0 auto;padding:12px 16px 40px}
+h1{font-size:20px;margin:6px 0 12px}
+section{background:var(--card);border-radius:12px;padding:12px;margin-bottom:12px}
+h2{font-size:15px;margin:0 0 8px;color:var(--acc)}
+button{background:var(--acc);color:#111;border:0;border-radius:8px;padding:9px 14px;font-weight:700;font-size:15px}
+button.sec{background:#454a55;color:var(--fg)}
+button:disabled{opacity:.4}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0}
+input[type=text],textarea,select,input[type=number]{background:#15171b;color:var(--fg);border:1px solid #444;border-radius:8px;padding:8px;font-size:16px}
+textarea{width:100%;min-height:60px}
+input[type=color]{width:40px;height:34px;border:0;background:none;padding:0}
+label{color:var(--mut);font-size:13px}
+#status{font-weight:700}
+.ok{color:var(--ok)}.bad{color:var(--bad)}
+canvas.pv{width:100%;image-rendering:pixelated;background:#000;border-radius:4px;display:block}
+#log{background:#000;color:#9f9;font:12px/1.4 ui-monospace,Menlo,monospace;height:170px;overflow:auto;padding:8px;border-radius:8px;white-space:pre-wrap}
+small{color:var(--mut)}
+</style>
+</head>
+<body>
+<main>
+<h1>iPixel Color 繁中控制台 <small>96×16</small></h1>
+
+<section>
+  <h2>1. 連線</h2>
+  <div class="row">
+    <button id="bConnect">連線 LED</button>
+    <button id="bScanAll" class="sec">列出全部藍牙裝置</button>
+    <button id="bDisc" class="sec" disabled>中斷</button>
+    <span id="status">未連線</span>
+  </div>
+  <div class="row">
+    <button class="sec act" id="bOn" disabled>開</button>
+    <button class="sec act" id="bOff" disabled>關</button>
+    <label>亮度 <input id="bri" type="range" min="1" max="100" value="60"></label>
+    <span id="briV">60</span>
+  </div>
+  <div id="connMsg" style="margin-top:6px"></div>
+  <small id="support"></small>
+</section>
+
+<section>
+  <h2>2. 繁體跑馬燈</h2>
+  <textarea id="txt">● 桃園 黃世杰 ● [#ffeb3b]團杰[/] ● 2026.11.28</textarea>
+  <small>局部變色：用 <code>[#ff0000]文字[/]</code> 包起來。</small>
+  <div class="row">
+    <label>字色 <input type="color" id="fg" value="#ffffff"></label>
+    <label>底色 <input type="color" id="bg" value="#dc5a50"></label>
+    <label>字型
+      <select id="font">
+        <option value='"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif'>黑體</option>
+        <option value='"Songti TC","Noto Serif TC","PMingLiU",serif'>明體</option>
+      </select></label>
+    <label><input type="checkbox" id="bold" checked> 粗體</label>
+  </div>
+  <div class="row">
+    <label>模式
+      <select id="mode"><option value="scroll">由右往左捲</option><option value="static">靜止（置中）</option></select></label>
+    <label>每格移 <input type="number" id="step" value="2" min="1" max="8" style="width:56px"> px</label>
+    <label>每格 <input type="number" id="delay" value="60" min="20" max="500" style="width:66px"> ms</label>
+    <label>門檻 <input type="number" id="thr" value="110" min="1" max="254" style="width:62px"></label>
+  </div>
+  <canvas id="pv" class="pv" width="96" height="16"></canvas>
+  <div class="row"><small id="info"></small></div>
+  <div class="row">
+    <button id="bPreview" class="sec">預覽</button>
+    <button id="bSendText" class="act" disabled>送到 LED</button>
+    <button id="bDl" class="sec">下載 GIF</button>
+  </div>
+</section>
+
+<section>
+  <h2>3. 送圖片／GIF</h2>
+  <input type="file" id="file" accept="image/*">
+  <div class="row">
+    <label>非 96×16 的靜態圖：
+      <select id="fit"><option value="fit">完整縮入（補黑）</option><option value="crop">填滿裁切</option><option value="stretch">硬拉伸</option></select></label>
+  </div>
+  <canvas id="pv2" class="pv" width="96" height="16"></canvas>
+  <small id="info2">GIF 會原檔送出，請先做成 96×16。</small>
+  <div class="row"><button id="bSendImg" class="act" disabled>送到 LED</button></div>
+</section>
+
+<section>
+  <h2>紀錄</h2>
+  <div id="log"></div>
+  <small>只有看到「✔ 裝置確認收完」才算成功；「✖ 逾時」代表裝置沒回應，畫面不會變。</small>
+</section>
+</main>
+
+<script>
+// ===== 協定（依 pypixelcolor，MIT，Lucas Balmès）=====
+const WRITE_UUID  = "0000fa02-0000-1000-8000-00805f9b34fb";
+const NOTIFY_UUID = "0000fa03-0000-1000-8000-00805f9b34fb";
+// 服務 UUID 未在文件中確認，列出常見候選，連上後自動找含 fa02 的服務
+// Bluefy 只吃完整 128-bit 字串，不吃數字縮寫（會報 Request payload could not be parsed）
+const SERVICE_CANDIDATES = ["fa00","fa01","ae00","ae30","ffe0","fff0","fee7","ff00"]
+  .map(x=>"0000"+x+"-0000-1000-8000-00805f9b34fb");
+const CHUNK = 244, WINDOW = 12*1024, ACK_TIMEOUT = 8000;
+const W = 96, H = 16;
+
+const $ = id => document.getElementById(id);
+const logEl = $("log");
+function log(msg, cls){ const d=document.createElement("div"); if(cls) d.className=cls;
+  d.textContent=new Date().toLocaleTimeString("zh-TW",{hour12:false})+"  "+msg; logEl.appendChild(d); logEl.scrollTop=1e9; }
+const hex = b => Array.from(b).map(x=>x.toString(16).padStart(2,"0")).join(" ");
+
+// CRC32 (IEEE)
+const CRC_T = (()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function crc32(b){let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=CRC_T[(c^b[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0}
+const le32 = v => [v&255,(v>>>8)&255,(v>>>16)&255,(v>>>24)&255];
+
+let dev=null, wr=null, nt=null, ackWaiters=[];
+function onNotify(e){
+  const d = new Uint8Array(e.target.value.buffer);
+  log("← "+hex(d));
+  const w = ackWaiters.shift(); if (w) w(d);
+}
+function waitNotify(ms){
+  return new Promise(res=>{ let done=false;
+    const f = d=>{ if(!done){done=true;res(d);} };
+    ackWaiters.push(f);
+    setTimeout(()=>{ if(!done){done=true; ackWaiters=ackWaiters.filter(x=>x!==f); res(null);} }, ms);
+  });
+}
+async function writeRaw(bytes){
+  for(let p=0;p<bytes.length;p+=CHUNK){
+    const c = bytes.slice(p,p+CHUNK);
+    if (wr.writeValueWithResponse) await wr.writeValueWithResponse(c); else await wr.writeValue(c);
+  }
+}
+async function sendCmd(name, bytes, expectAck=true){
+  if(!wr) return log("尚未連線","bad");
+  log("→ "+name+"  "+hex(bytes));
+  const p = waitNotify(3000);
+  await writeRaw(new Uint8Array(bytes));
+  if (expectAck){ const r = await p; if(!r) log("✖ "+name+" 沒有回應（不一定失敗，請看 LED 有沒有變）","bad"); return r; }
+}
+
+// 圖片/GIF 封包：每 12KB 一個 window，每個 window 等一次 ACK
+async function sendFile(bytes, isGif, slot=0){
+  if(!wr) return log("尚未連線","bad");
+  const size = le32(bytes.length), crc = le32(crc32(bytes));
+  const total = Math.ceil(bytes.length/WINDOW);
+  log(`送出 ${isGif?"GIF":"PNG"} ${(bytes.length/1024).toFixed(1)} KB，共 ${total} 段，CRC ${crc32(bytes).toString(16)}`);
+  setBusy(true);
+  try{
+    for(let i=0;i<total;i++){
+      const payload = bytes.slice(i*WINDOW,(i+1)*WINDOW);
+      const header = [isGif?3:2, 0, i===0?0:2, ...size, ...crc, isGif?2:0, slot];
+      const len = 2 + header.length + payload.length;
+      const msg = new Uint8Array(len);
+      msg.set([len&255,(len>>8)&255],0); msg.set(header,2); msg.set(payload,2+header.length);
+      const p = waitNotify(ACK_TIMEOUT);
+      await writeRaw(msg);
+      const r = await p;
+      if(!r){ log(`✖ 第 ${i+1}/${total} 段逾時，裝置沒有回 ACK`,"bad"); return false; }
+      if(r[0]===5 && r[4]===3){ log("✔ 裝置確認收完","ok"); return true; }
+      if(r[0]===5 && (r[4]===0||r[4]===1)){ log(`… 第 ${i+1}/${total} 段已確認`); continue; }
+      log(`? 第 ${i+1} 段收到非預期回應，繼續`,"bad");
+    }
+    const fin = await waitNotify(ACK_TIMEOUT);
+    if(fin && fin[0]===5 && fin[4]===3){ log("✔ 裝置確認收完","ok"); return true; }
+    log("✖ 沒收到最後確認（code 3）；若 LED 已更新可忽略","bad"); return false;
+  } catch(e){ log("✖ 傳送錯誤："+e.message,"bad"); return false; }
+  finally{ setBusy(false); }
+}
+
+// ===== 連線 =====
+$("support").textContent = navigator.bluetooth ? "此瀏覽器支援 Web Bluetooth。" :
+  "此瀏覽器不支援 Web Bluetooth。iPhone 請用 Bluefy 瀏覽器開這頁；Android／電腦請用 Chrome 或 Edge。";
+function setConn(on){
+  document.querySelectorAll(".act").forEach(b=>b.disabled=!on);
+  $("bDisc").disabled=!on; $("bConnect").disabled=on; $("bScanAll").disabled=on;
+  $("status").textContent = on ? "已連線："+(dev?.name||"") : "未連線";
+  $("status").className = on ? "ok" : "";
+}
+function setBusy(b){ document.querySelectorAll(".act").forEach(x=>x.disabled=b||!wr); }
+function connMsg(t,cls){ const e=$("connMsg"); e.textContent=t; e.className=cls||""; }
+async function connect(all){
+  if(!navigator.bluetooth){ connMsg("這個瀏覽器沒有藍牙功能，請用 Bluefy 開。","bad"); return; }
+  connMsg("正在開啟藍牙選擇視窗…（若沒跳出，請看下方說明）");
+  log(all?"掃描全部裝置…":"掃描 LED 開頭的裝置…");
+  try{
+    try{ const ok = navigator.bluetooth.getAvailability ? await navigator.bluetooth.getAvailability() : true;
+      if(!ok){ connMsg("手機藍牙沒開，或沒允許 Bluefy 使用藍牙（設定 → Bluefy → 藍牙）。","bad"); log("藍牙不可用","bad"); return; } }catch(e){}
+    const opt = all ? {acceptAllDevices:true, optionalServices:SERVICE_CANDIDATES}
+                    : {filters:[{namePrefix:"LED"}], optionalServices:SERVICE_CANDIDATES};
+    dev = await navigator.bluetooth.requestDevice(opt);
+    dev.addEventListener("gattserverdisconnected",()=>{ wr=null; setConn(false); log("裝置已中斷","bad"); });
+    log("選到裝置："+(dev.name||"(無名稱)")+"，連線中…"); connMsg("連線中…");
+    const srv = await dev.gatt.connect();
+    let svcs = [];
+    try{ svcs = await srv.getPrimaryServices(); }catch(e){ log("讀服務清單失敗："+e.message,"bad"); }
+    log("找到服務："+(svcs.map(s=>s.uuid).join(", ")||"(無)"));
+    for (const s of svcs){
+      try{ wr = await s.getCharacteristic(WRITE_UUID); nt = await s.getCharacteristic(NOTIFY_UUID); break; }catch(e){ wr=null; }
+    }
+    if(!wr) throw new Error("找不到 fa02 寫入特徵值，請把紀錄裡「找到服務」那行截圖給開發者");
+    await nt.startNotifications(); nt.addEventListener("characteristicvaluechanged", onNotify);
+    setConn(true); connMsg("已連線","ok");
+    const n = new Date();
+    const r = await sendCmd("讀取裝置資訊",[8,0,1,0x80,n.getHours(),n.getMinutes(),n.getSeconds(),0]);
+    if(r && r.length>=5){
+      const t = r[4]; const map={132:"96×16",131:"64×16",130:"32×16",129:"32×32",128:"64×64",135:"144×16",136:"192×16",139:"96×32"};
+      const sz = map[t]||("未知型號 "+t);
+      log("裝置螢幕："+sz, sz==="96×16"?"ok":"bad");
+    }
+  }catch(e){
+    const m = e.name==="NotFoundError" ? (all?"沒有選裝置，或附近找不到裝置。":"找不到 LED 開頭的裝置。請先完全關掉 iPixel Color App（它連著時 LED 不會被別人看到），再試；或改按「列出全部藍牙裝置」。")
+            : e.message;
+    connMsg("連線失敗："+m,"bad"); log("連線失敗："+e.name+" "+e.message,"bad");
+  }
+}
+$("bConnect").onclick = ()=>connect(false);
+$("bScanAll").onclick = ()=>connect(true);
+$("bDisc").onclick = ()=>{ dev?.gatt?.disconnect(); };
+$("bOn").onclick  = ()=>sendCmd("開機",[5,0,7,1,1]);
+$("bOff").onclick = ()=>sendCmd("關機",[5,0,7,1,0]);
+let briT; $("bri").oninput = e=>{ $("briV").textContent=e.target.value; clearTimeout(briT);
+  briT=setTimeout(()=>sendCmd("亮度 "+e.target.value,[5,0,4,0x80,+e.target.value]),250); };
+
+// ===== 文字 → 點陣 → 影格 =====
+function parseSegs(s, base){
+  const out=[]; const stack=[base]; const re=/\[(#?[0-9a-fA-F]{6})\]|\[\/(?:#|color)?\]/g; let last=0,m;
+  while((m=re.exec(s))){ if(m.index>last) out.push([s.slice(last,m.index),stack.at(-1)]);
+    if(m[1]) stack.push(m[1].startsWith("#")?m[1]:"#"+m[1]); else if(stack.length>1) stack.pop();
+    last=re.lastIndex; }
+  if(last<s.length) out.push([s.slice(last),stack.at(-1)]);
+  return out;
+}
+const hexRGB = h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+function renderStrip(){
+  const segs = parseSegs($("txt").value.replace(/\n/g," "), $("fg").value);
+  const font = ($("bold").checked?"bold ":"")+"16px "+$("font").value;
+  const c = document.createElement("canvas"), x = c.getContext("2d");
+  x.font=font; let tw=0; for(const [t] of segs) tw+=Math.ceil(x.measureText(t).width);
+  tw=Math.max(tw,1);
+  c.width=tw; c.height=H;
+  const ctx=c.getContext("2d"); ctx.font=font; ctx.textBaseline="middle";
+  const bg=hexRGB($("bg").value), thr=+$("thr").value;
+  // 每段字各畫在獨立遮罩，二值化後上色（LED 不吃反鋸齒灰階）
+  const out = ctx.createImageData(tw,H);
+  for(let i=0;i<tw*H;i++){out.data.set([...bg,255],i*4)}
+  let px=0;
+  for(const [t,col] of segs){
+    const w=Math.ceil(ctx.measureText(t).width);
+    const m=document.createElement("canvas"); m.width=Math.max(w,1); m.height=H;
+    const mc=m.getContext("2d"); mc.font=font; mc.textBaseline="middle"; mc.fillStyle="#fff"; mc.fillText(t,0,H/2+1);
+    const md=mc.getImageData(0,0,m.width,H).data, rgb=hexRGB(col);
+    for(let y=0;y<H;y++)for(let xx=0;xx<w;xx++){ if(md[(y*m.width+xx)*4+3]>=thr){ const o=(y*tw+px+xx)*4; out.data.set([...rgb,255],o);} }
+    px+=w;
+  }
+  return {img:out, w:tw, bg};
+}
+function buildFrames(){
+  const {img,w,bg}=renderStrip(); const frames=[];
+  const get=(sx)=>{ const f=new Uint8Array(W*H*3);
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const X=x+sx; let r,g,b;
+      if(X>=0&&X<w){const o=(y*w+X)*4;r=img.data[o];g=img.data[o+1];b=img.data[o+2];} else [r,g,b]=bg;
+      f.set([r,g,b],(y*W+x)*3);} return f; };
+  if($("mode").value==="static"){ frames.push(get(-Math.floor((W-w)/2))); }
+  else { const st=Math.max(1,+$("step").value); for(let off=-W; off<w; off+=st) frames.push(get(off)); }
+  return frames;
+}
+
+// ===== 最小 GIF 編碼器 =====
+function encodeGIF(frames, delayMs){
+  const pal=new Map(); const idxFrames=[];
+  for(const f of frames){ const ix=new Uint8Array(W*H);
+    for(let i=0;i<W*H;i++){ const k=(f[i*3]<<16)|(f[i*3+1]<<8)|f[i*3+2];
+      let v=pal.get(k); if(v===undefined){ if(pal.size>=256) throw new Error("顏色超過 256 種"); v=pal.size; pal.set(k,v);} ix[i]=v; }
+    idxFrames.push(ix); }
+  let bits=1; while((1<<bits)<Math.max(pal.size,2)) bits++;
+  const out=[]; const w16=v=>out.push(v&255,(v>>8)&255);
+  out.push(...[71,73,70,56,57,97]); w16(W); w16(H); out.push(0xF0|(bits-1),0,0);
+  const cols=[...pal.keys()]; for(let i=0;i<(1<<bits);i++){const c=cols[i]??0; out.push((c>>16)&255,(c>>8)&255,c&255);}
+  out.push(0x21,0xFF,11,...[..."NETSCAPE2.0"].map(c=>c.charCodeAt(0)),3,1,0,0,0);
+  const d=Math.round(delayMs/10);
+  for(const ix of idxFrames){
+    out.push(0x21,0xF9,4,0x04); w16(d); out.push(0,0);
+    out.push(0x2C); w16(0);w16(0);w16(W);w16(H); out.push(0);
+    const minCode=Math.max(2,bits); out.push(minCode);
+    const data=lzw(ix,minCode); for(let p=0;p<data.length;p+=255){const s=data.slice(p,p+255); out.push(s.length,...s);} out.push(0);
+  }
+  out.push(0x3B); return new Uint8Array(out);
+}
+function lzw(ix,minCode){
+  const clear=1<<minCode, eoi=clear+1; let size=minCode+1, next=eoi+1, dict=new Map();
+  const bytes=[]; let cur=0,nb=0; const emit=c=>{cur|=c<<nb;nb+=size;while(nb>=8){bytes.push(cur&255);cur>>=8;nb-=8;}};
+  emit(clear); let pre=ix[0];
+  for(let i=1;i<ix.length;i++){ const k=ix[i], key=pre*4096+k;
+    if(dict.has(key)){pre=dict.get(key);continue;}
+    emit(pre);
+    if(next<4096){ dict.set(key,next++); if(next>(1<<size)&&size<12) size++; }
+    else { emit(clear); dict=new Map(); size=minCode+1; next=eoi+1; }
+    pre=k; }
+  emit(pre); emit(eoi); if(nb>0) bytes.push(cur&255); return bytes;
+}
+
+// ===== 預覽 =====
+let anim; function play(canvas, frames, delay){
+  clearInterval(anim); const ctx=canvas.getContext("2d"); let i=0;
+  const draw=()=>{ const f=frames[i%frames.length], id=ctx.createImageData(W,H);
+    for(let p=0;p<W*H;p++) id.data.set([f[p*3],f[p*3+1],f[p*3+2],255],p*4);
+    ctx.putImageData(id,0,0); i++; };
+  draw(); if(frames.length>1) anim=setInterval(draw,delay);
+}
+let lastGif=null;
+function makeText(){
+  const frames=buildFrames(), delay=+$("delay").value;
+  lastGif=encodeGIF(frames,delay);
+  play($("pv"),frames,delay);
+  $("info").textContent=`${frames.length} 格，一輪約 ${(frames.length*delay/1000).toFixed(1)} 秒，GIF ${(lastGif.length/1024).toFixed(1)} KB`
+    + (frames.length>400?"（格數很多，若傳不進去請加大「每格移」）":"");
+  return lastGif;
+}
+$("bPreview").onclick=()=>{ try{makeText()}catch(e){log(e.message,"bad")} };
+$("bSendText").onclick=async()=>{ try{ await sendFile(makeText(),true); }catch(e){log(e.message,"bad")} };
+$("bDl").onclick=()=>{ const g=makeText(); const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([g],{type:"image/gif"})); a.download="led_96x16.gif"; a.click(); };
+
+// ===== 圖片 =====
+let imgBytes=null, imgIsGif=false;
+$("file").onchange=async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const buf=new Uint8Array(await f.arrayBuffer());
+  imgIsGif = buf[0]===0x47&&buf[1]===0x49&&buf[2]===0x46;
+  const bmp=await createImageBitmap(f);
+  const c=$("pv2"), ctx=c.getContext("2d"); ctx.imageSmoothingEnabled=false;
+  ctx.fillStyle="#000"; ctx.fillRect(0,0,W,H);
+  if(imgIsGif){
+    const gw=buf[6]|(buf[7]<<8), gh=buf[8]|(buf[9]<<8);
+    ctx.drawImage(bmp,0,0,W,H); imgBytes=buf;
+    $("info2").textContent=`GIF ${gw}×${gh}，${(buf.length/1024).toFixed(1)} KB，原檔送出`+(gw!==W||gh!==H?"（尺寸不是 96×16，LED 上可能會被裁或變形）":"");
+    $("info2").className=(gw!==W||gh!==H)?"bad":"";
+  } else {
+    const mode=$("fit").value; let dw=W,dh=H,dx=0,dy=0;
+    if(mode!=="stretch"){ const s = mode==="fit"?Math.min(W/bmp.width,H/bmp.height):Math.max(W/bmp.width,H/bmp.height);
+      dw=Math.round(bmp.width*s); dh=Math.round(bmp.height*s); dx=Math.floor((W-dw)/2); dy=Math.floor((H-dh)/2); }
+    ctx.drawImage(bmp,dx,dy,dw,dh);
+    imgBytes=new Uint8Array(await (await new Promise(r=>c.toBlob(r,"image/png"))).arrayBuffer());
+    $("info2").textContent=`已轉成 96×16 PNG，${(imgBytes.length/1024).toFixed(1)} KB`; $("info2").className="";
+  }
+};
+$("fit").onchange=()=>{ if($("file").files[0]) $("file").onchange({target:$("file")}); };
+$("bSendImg").onclick=()=>{ if(!imgBytes) return log("先選一張圖","bad"); sendFile(imgBytes,imgIsGif); };
+
+makeText();
+log("就緒。按「連線 LED」，在清單中選 LED_BLE_ 開頭的裝置。");
+</script>
+</body>
+</html>
