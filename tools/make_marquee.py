@@ -28,6 +28,6 @@ for p in parts: strip.paste(p,(x,0)); x+=p.width
 full=Image.new("RGB",(tw+W,H),BLACK); full.paste(strip,(W,0))
 frames=[full.crop((o,0,o+W,H)) for o in range(0,tw,2)]
 pal=[f.convert("P",palette=Image.ADAPTIVE,colors=8) for f in frames]
-pal[0].save("gallery/marquee_taoyuan.gif",save_all=True,append_images=pal[1:],duration=60,loop=0,optimize=False,disposal=1)
+pal[0].save("gallery/marquee_taoyuan.gif",save_all=True,append_images=pal[1:],duration=90,loop=0,optimize=False,disposal=1)
 strip.resize((tw*8,H*8),Image.NEAREST).save("strip_preview.png")
 print(tw,len(frames))

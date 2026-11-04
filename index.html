@@ -86,7 +86,23 @@ small{color:var(--mut)}
 
 <section>
   <h2>圖庫（已設計好的 96×16）</h2>
+  <div class="row">
+    <label>送出方式
+      <select id="gMode"><option value="0">單次顯示（不存）</option><option value="save">存成節目</option></select></label>
+    <label id="gSlotL" style="display:none">存到第 <input type="number" id="gSlot" value="2" min="1" max="255" style="width:62px"> 格</label>
+    <label>跑動速度
+      <select id="gSpeed">
+        <option value="0.5">50%（慢）</option><option value="0.6667">67%</option><option value="0.8">80%</option>
+        <option value="1" selected>100%（檔案原速）</option><option value="1.25">125%</option><option value="1.5">150%</option><option value="2">200%（快）</option>
+      </select></label>
+  </div>
+  <small id="gNote">單次顯示：LED 會一直播這張，直到送別的東西或用下面「顯示第 n 格」切回節目。</small>
   <div id="gal"></div>
+  <div class="row">
+    <label>顯示第 <input type="number" id="showN" value="1" min="1" max="255" style="width:62px"> 格</label>
+    <button class="sec act" id="bShow" disabled>切換</button>
+    <small>切回已存的節目（例如 001）；空格的話裝置會輪播現有節目</small>
+  </div>
   <small>要新增圖庫項目，把 96×16 的 GIF／PNG 放進 gallery/ 並登記到 gallery.json。</small>
 </section>
 
@@ -368,6 +384,35 @@ $("file").onchange=async e=>{
 $("fit").onchange=()=>{ if($("file").files[0]) $("file").onchange({target:$("file")}); };
 $("bSendImg").onclick=()=>{ if(!imgBytes) return log("先選一張圖","bad"); sendFile(imgBytes,imgIsGif); };
 
+// ===== GIF 速度：沿著 GIF 區塊結構改每格的 Graphic Control Extension 延遲（不重新編碼像素）=====
+function gifSpeed(src, factor){
+  const b=new Uint8Array(src); let p=6;
+  if(String.fromCharCode(...b.slice(0,6)).slice(0,3)!=="GIF") throw new Error("不是 GIF");
+  const skipSub=()=>{ while(true){ if(p>=b.length) throw new Error("GIF 結構截斷"); const n=b[p++]; if(n===0) return; p+=n; } };
+  const lsd=b[10]; p=13; if(lsd&0x80) p+=3*(1<<((lsd&7)+1));
+  let n=0, from=new Set(), to=new Set();
+  while(p<b.length){
+    const t=b[p++];
+    if(t===0x3B) break;
+    if(t===0x21){
+      const lab=b[p++];
+      if(lab===0xF9 && b[p]===4){
+        const d=b[p+2]|(b[p+3]<<8), nd=Math.max(2,Math.min(65535,Math.round(d/factor)));
+        b[p+2]=nd&255; b[p+3]=nd>>8; n++; from.add(d*10); to.add(nd*10);
+      }
+      skipSub();
+    } else if(t===0x2C){
+      const f=b[p+8]; p+=9; if(f&0x80) p+=3*(1<<((f&7)+1)); p++; skipSub();
+    } else throw new Error("GIF 區塊格式不認得（0x"+t.toString(16)+"），已停止，未送出");
+  }
+  if(n===0) throw new Error("GIF 裡找不到任何格延遲，未送出");
+  return {bytes:b, n, from:[...from].join("/"), to:[...to].join("/")};
+}
+$("gMode").onchange=()=>{ const s=$("gMode").value==="save"; $("gSlotL").style.display=s?"":"none";
+  $("gNote").textContent = s ? "存成節目：會寫進裝置記憶體。App 現有 001、006，避免選到已用的格子以免覆蓋；壞資料存進格子可能造成開機循環，先存一格、斷電重開確認還在。"
+                             : "單次顯示：LED 會一直播這張，直到送別的東西或用下面「顯示第 n 格」切回節目。"; };
+$("bShow").onclick=()=>{ const n=Math.max(1,Math.min(255,+$("showN").value|0)); sendCmd("顯示第 "+n+" 格",[7,0,8,0x80,1,0,n]); };
+
 // ===== 圖庫 =====
 (async()=>{
   const box=$("gal");
@@ -378,11 +423,18 @@ $("bSendImg").onclick=()=>{ if(!imgBytes) return log("先選一張圖","bad"); s
       d.innerHTML=`<img alt=""><div class="nm"></div><button class="act" disabled>送出</button>`;
       d.querySelector("img").src="gallery/"+it.file;
       d.querySelector(".nm").textContent=it.name;
-      d.querySelector("button").onclick=async()=>{
+      d.querySelector("button").onclick=async()=>{ try{
         const b=new Uint8Array(await (await fetch("gallery/"+it.file)).arrayBuffer());
         const gif=b[0]===0x47&&b[1]===0x49&&b[2]===0x46;
-        log("圖庫："+it.name); await sendFile(b,gif);
-      };
+        const sp=+$("gSpeed").value, save=$("gMode").value==="save";
+        const slot=save? Math.max(1,Math.min(255,+$("gSlot").value|0)) : 0;
+        let data=b, info="";
+        if(gif && sp!==1){ const r=gifSpeed(b,sp); data=r.bytes; info=`，速度 ${Math.round(sp*100)}%（每格 ${r.from} → ${r.to} ms，${r.n} 格）`; }
+        else if(!gif && sp!==1) info="（靜態圖，速度不適用）";
+        log("圖庫："+it.name+(save?`，存到第 ${slot} 格`:"，單次顯示")+info);
+        const ok=await sendFile(data,gif,slot);
+        if(ok && save) log(`請到 iPixel App 節目列表確認第 ${slot} 格出現（App 用完要完全關掉再回來）`,"ok");
+      }catch(e){ log("✖ 圖庫送出失敗："+e.message,"bad"); } };
       box.appendChild(d);
     }
     if(wr) setBusy(false);
