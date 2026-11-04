@@ -32,6 +32,8 @@ description: 接續或修改 Led_Control（iPixel Color 96×16 LED 繁中 Web Bl
 - 顯示某格 `07 00 08 80 01 00 n`；節目輪播 `[4+N] 00 08 80 N_L N_H [格號…]`（未實測）
 - 刪除某格、清 ROM 見 pypixelcolor `commands/delete.py`、`clear.py`（clear 會清掉設定，**不要用**）
 - 警告：存進格子的資料若壞掉可能開機循環；先不存格測通再存
+- slot 0＝只顯示不存 ✔；slot ≥1＝存，開機依格號輪播 ✔；裝置讀不回內容，iPixel App 也看不到網頁存的 → 網頁節目表（localStorage）是唯一紀錄
+- 遙控器只會插播內建動畫，不能選節目格 ✔
 
 ## 圖片製作規則
 

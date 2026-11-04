@@ -22,6 +22,7 @@ input[type=color]{width:40px;height:34px;border:0;background:none;padding:0}
 label{color:var(--mut);font-size:13px}
 #status{font-weight:700}
 .ok{color:var(--ok)}.bad{color:var(--bad)}
+.pi{border-top:1px solid #3a3e46;padding:8px 0}
 .gi{display:flex;gap:10px;align-items:center;margin:8px 0}.gi img{width:60%;image-rendering:pixelated;background:#000;border-radius:4px}.gi .nm{flex:1;font-size:13px}
 canvas.pv{width:100%;image-rendering:pixelated;background:#000;border-radius:4px;display:block}
 #log{background:#000;color:#9f9;font:12px/1.4 ui-monospace,Menlo,monospace;height:170px;overflow:auto;padding:8px;border-radius:8px;white-space:pre-wrap}
@@ -98,12 +99,27 @@ small{color:var(--mut)}
   </div>
   <small id="gNote">單次顯示：LED 會一直播這張，直到送別的東西或用下面「顯示第 n 格」切回節目。</small>
   <div id="gal"></div>
+  <small>要新增圖庫項目，把 96×16 的 GIF／PNG 放進 gallery/ 並登記到 gallery.json。</small>
+</section>
+
+<section>
+  <h2>節目表（網頁自己的紀錄）</h2>
+  <small>裝置不會回報存了什麼，iPixel App 也看不到網頁存的節目，所以由網頁自己記。紀錄只在這支手機的 Bluefy 裡，清除網站資料就沒了，請定期「匯出備份」。開機後裝置會依格號輪播所有已存節目。</small>
+  <div id="prog" style="margin-top:6px"></div>
+  <div class="row">
+    <label>補登第 <input type="number" id="mSlot" value="1" min="1" max="255" style="width:62px"> 格</label>
+    <input type="text" id="mName" placeholder="內容說明" style="flex:1;min-width:120px">
+    <button class="sec" id="bManual">補登</button>
+  </div>
+  <div class="row">
+    <button class="sec" id="bExport">匯出備份</button>
+    <label class="sec" style="background:#454a55;color:var(--fg);border-radius:8px;padding:9px 14px;font-weight:700;font-size:15px">匯入備份<input type="file" id="fImport" accept=".json,application/json" style="display:none"></label>
+  </div>
   <div class="row">
     <label>顯示第 <input type="number" id="showN" value="1" min="1" max="255" style="width:62px"> 格</label>
     <button class="sec act" id="bShow" disabled>切換</button>
-    <small>切回已存的節目（例如 001）；空格的話裝置會輪播現有節目</small>
+    <small>空格的話裝置會輪播現有節目</small>
   </div>
-  <small>要新增圖庫項目，把 96×16 的 GIF／PNG 放進 gallery/ 並登記到 gallery.json。</small>
 </section>
 
 <section>
@@ -409,9 +425,70 @@ function gifSpeed(src, factor){
   return {bytes:b, n, from:[...from].join("/"), to:[...to].join("/")};
 }
 $("gMode").onchange=()=>{ const s=$("gMode").value==="save"; $("gSlotL").style.display=s?"":"none";
-  $("gNote").textContent = s ? "存成節目：會寫進裝置記憶體。App 現有 001、006，避免選到已用的格子以免覆蓋；壞資料存進格子可能造成開機循環，先存一格、斷電重開確認還在。"
+  $("gNote").textContent = s ? "存成節目：寫進裝置記憶體，成功後自動記到下方「節目表」（預設填第一個空格）。iPixel App 看不到網頁存的節目；用 App 存的也不會出現在這裡，要自己補登。"
                              : "單次顯示：LED 會一直播這張，直到送別的東西或用下面「顯示第 n 格」切回節目。"; };
 $("bShow").onclick=()=>{ const n=Math.max(1,Math.min(255,+$("showN").value|0)); sendCmd("顯示第 "+n+" 格",[7,0,8,0x80,1,0,n]); };
+
+// ===== 節目表（localStorage；裝置無法讀回，紀錄可能與實際不符）=====
+const PKEY="ledPrograms.v1";
+let progs={};
+try{ progs=JSON.parse(localStorage.getItem(PKEY)||"{}"); }catch(e){ log("✖ 讀取節目紀錄失敗："+e.message+"（節目表會是空的）","bad"); }
+function saveProgs(){ try{ localStorage.setItem(PKEY,JSON.stringify(progs)); return true; }
+  catch(e){ log("✖ 節目紀錄沒存成功："+e.message+"，請立刻匯出備份或手動記下","bad"); return false; } }
+const tsNow=()=>{ const d=new Date(),z=n=>String(n).padStart(2,"0"); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`; };
+function nextFree(){ let n=1; while(progs[n]) n++; return n; }
+async function thumbOf(bytes, isGif){
+  try{
+    const url=URL.createObjectURL(new Blob([bytes],{type:isGif?"image/gif":"image/png"}));
+    const img=new Image(); await new Promise((ok,ng)=>{img.onload=ok;img.onerror=()=>ng(new Error("圖片解碼失敗"));img.src=url;});
+    const c=document.createElement("canvas"); c.width=W; c.height=H; c.getContext("2d").drawImage(img,0,0,W,H);
+    URL.revokeObjectURL(url); return c.toDataURL("image/png");
+  }catch(e){ log("縮圖產生失敗（不影響傳送）："+e.message,"bad"); return null; }
+}
+function renderProgs(){
+  const box=$("prog"); box.innerHTML="";
+  const keys=Object.keys(progs).map(Number).sort((a,b)=>a-b);
+  if(!keys.length){ box.innerHTML="<small>（目前沒有紀錄）</small>"; }
+  for(const n of keys){
+    const p=progs[n], d=document.createElement("div"); d.className="pi";
+    d.innerHTML=`<div class="row" style="margin:0"><b style="width:36px">${String(n).padStart(3,"0")}</b>${p.thumb?'<img alt="" style="flex:1;width:0;image-rendering:pixelated;background:#000;border-radius:4px">':'<span style="flex:1;color:var(--mut);font-size:12px">（無縮圖）</span>'}</div>
+      <div class="row" style="margin:4px 0 0"><div class="nm" style="flex:1;font-size:13px"></div><button class="sec act">顯示</button><button class="sec act" style="background:#7a2f2b">刪除</button></div>`;
+    if(p.thumb) d.querySelector("img").src=p.thumb;
+    d.querySelector(".nm").textContent=p.name+"｜"+(p.manual?"補登 ":"")+p.at;
+    const [bS,bD]=d.querySelectorAll("button");
+    bS.onclick=()=>sendCmd("顯示第 "+n+" 格",[7,0,8,0x80,1,0,n]);
+    bD.onclick=async()=>{
+      if(!confirm(`要從 LED 刪除第 ${n} 格「${p.name}」嗎？`)) return;
+      const r=await sendCmd("刪除第 "+n+" 格",[7,0,2,1,1,0,n]);
+      if(r){ delete progs[n]; saveProgs(); renderProgs(); log(`已刪除第 ${n} 格紀錄；請斷電重開確認裝置上真的不見了（刪除指令尚未實測）`,"ok"); }
+      else log(`✖ 刪除第 ${n} 格沒收到回應，紀錄保留；請看 LED 輪播確認`,"bad");
+    };
+    box.appendChild(d);
+  }
+  setBusy(false);
+  $("gSlot").value=nextFree();
+}
+$("bManual").onclick=()=>{
+  const n=Math.max(1,Math.min(255,+$("mSlot").value|0)), nm=$("mName").value.trim();
+  if(!nm) return log("補登要填內容說明","bad");
+  if(progs[n] && !confirm(`第 ${n} 格已記為「${progs[n].name}」，要改掉嗎？`)) return;
+  progs[n]={name:nm,thumb:null,at:tsNow(),manual:true};
+  if(saveProgs()) log(`已補登第 ${n} 格：${nm}`,"ok");
+  $("mName").value=""; $("mSlot").value=n+1; renderProgs();
+};
+$("bExport").onclick=()=>{
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([JSON.stringify(progs,null,1)],{type:"application/json"}));
+  a.download="led_programs_"+tsNow().replace(/[- :]/g,"")+".json"; a.click(); log("已匯出節目紀錄（"+Object.keys(progs).length+" 格）","ok");
+};
+$("fImport").onchange=async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  try{ const o=JSON.parse(await f.text());
+    if(typeof o!=="object"||Array.isArray(o)||!Object.entries(o).every(([k,v])=>/^\d+$/.test(k)&&v&&typeof v.name==="string")) throw new Error("格式不對");
+    if(!confirm(`匯入會取代目前 ${Object.keys(progs).length} 筆紀錄，改成檔案裡的 ${Object.keys(o).length} 筆，確定？`)) return;
+    progs=o; if(saveProgs()) log("已匯入節目紀錄","ok"); renderProgs();
+  }catch(err){ log("✖ 匯入失敗："+err.message,"bad"); }
+  e.target.value="";
+};
 
 // ===== 圖庫 =====
 (async()=>{
@@ -431,9 +508,14 @@ $("bShow").onclick=()=>{ const n=Math.max(1,Math.min(255,+$("showN").value|0)); 
         let data=b, info="";
         if(gif && sp!==1){ const r=gifSpeed(b,sp); data=r.bytes; info=`，速度 ${Math.round(sp*100)}%（每格 ${r.from} → ${r.to} ms，${r.n} 格）`; }
         else if(!gif && sp!==1) info="（靜態圖，速度不適用）";
+        if(save && progs[slot] && !confirm(`第 ${slot} 格已記為「${progs[slot].name}」，要覆蓋嗎？`)) return;
         log("圖庫："+it.name+(save?`，存到第 ${slot} 格`:"，單次顯示")+info);
         const ok=await sendFile(data,gif,slot);
-        if(ok && save) log(`請到 iPixel App 節目列表確認第 ${slot} 格出現（App 用完要完全關掉再回來）`,"ok");
+        if(ok && save){
+          progs[slot]={name:it.name+(gif&&sp!==1?`（速度 ${Math.round(sp*100)}%）`:""),thumb:await thumbOf(data,gif),at:tsNow()};
+          if(saveProgs()) log(`已記錄：第 ${slot} 格＝${progs[slot].name}`,"ok");
+          renderProgs();
+        } else if(!ok && save) log(`第 ${slot} 格傳送沒確認成功，未寫入紀錄（裝置上可能是舊的或半截資料）`,"bad");
       }catch(e){ log("✖ 圖庫送出失敗："+e.message,"bad"); } };
       box.appendChild(d);
     }
@@ -441,6 +523,7 @@ $("bShow").onclick=()=>{ const n=Math.max(1,Math.min(255,+$("showN").value|0)); 
   }catch(e){ box.textContent="圖庫載入失敗："+e.message; }
 })();
 
+renderProgs();
 makeText();
 log("就緒。按「連線 LED」，在清單中選 LED_BLE_ 開頭的裝置。");
 </script>
