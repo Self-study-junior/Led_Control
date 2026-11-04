@@ -35,6 +35,18 @@ description: 接續或修改 Led_Control（iPixel Color 96×16 LED 繁中 Web Bl
 - slot 0＝只顯示不存 ✔；slot ≥1＝存，開機依格號輪播 ✔；裝置讀不回內容，iPixel App 也看不到網頁存的 → 網頁節目表（localStorage）是唯一紀錄
 - 遙控器只會插播內建動畫，不能選節目格 ✔
 
+## iPixel Color 3.8.1 Android 反編譯結果（2026-11-04，jadx 靜態分析，未實測）
+
+來源：使用者提供的 APKPure XAPK（`C:\UnAPK`），程式在 `com.wifiled.ipixels`。**廠商素材不可放進本 repo（Pages 公開）**。
+
+- 遙控器 9 鍵＝裝置格號 **111～119**（`BusinessControlModel.autoSendChannel`）。App 的「遙控器」頁（`BusinessRemoteControlActivity`，96 寬機型有）可編輯每鍵內容（GIF／圖片／文字）後整批送出：
+  1. 若 MCU 版本 > 4：先送 `[長度,00,08,80,9,00,111,112,…,119]`（同 show_slot／輪播的 08 80 格式，用途推測為登記遙控器格）。MCU 版本來自 App 的 OTA 伺服器查詢，BLE 讀不到
+  2. 每鍵間隔 300 ms，用一般送圖封包存進 slot＝111+鍵號−1（尾巴 `[02, slot]`，與網頁 sendFile 相同）
+- 「恢復預設」＝把 APK 內建 `assets/remote/yk_anim_{en|cn}_16x96_{1..9}.gif` 再送一次（en 鍵 1 在 CID 0017／PID 01 機型改用 `_1_171.gif`）
+- App 虛擬遙控器按鍵：`06 00 07 80 k 語言`（k＝1～9；語言＝App 介面是中文時 1，否則 0）→ 這可能就是 App 一用就把動畫改回簡體的原因
+- 內建英文 9 鍵：BIG SALE、ON SALE、OPEN 24 HOURS、SHOP OPEN、WiFi FREE、QUICK BUY、WELCOME、DISCOUNTS、SHOPPING（96×16，0.8～4 秒）
+- 其他 96×16 素材：`assets/gif/text_ani_bg_16_96_*`（10 個文字背景動畫）、`assets/border/ani_border_96_16_*`（24 個邊框）、`assets/emoji/text_emoji_16_*`（525 個 16px 表情）；「素材庫」其餘內容從 `app.heaton.cn` 下載，不在 APK
+
 ## 圖片製作規則
 
 - 一律 96×16，黑色＝不亮
