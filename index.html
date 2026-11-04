@@ -421,10 +421,10 @@ $("bShow").onclick=()=>{ const n=Math.max(1,Math.min(255,+$("showN").value|0)); 
     for(const it of list){
       const d=document.createElement("div"); d.className="gi";
       d.innerHTML=`<img alt=""><div class="nm"></div><button class="act" disabled>送出</button>`;
-      d.querySelector("img").src="gallery/"+it.file;
+      d.querySelector("img").src="gallery/"+it.file+"?t="+Date.now();
       d.querySelector(".nm").textContent=it.name;
       d.querySelector("button").onclick=async()=>{ try{
-        const b=new Uint8Array(await (await fetch("gallery/"+it.file)).arrayBuffer());
+        const b=new Uint8Array(await (await fetch("gallery/"+it.file,{cache:"no-store"})).arrayBuffer());
         const gif=b[0]===0x47&&b[1]===0x49&&b[2]===0x46;
         const sp=+$("gSpeed").value, save=$("gMode").value==="save";
         const slot=save? Math.max(1,Math.min(255,+$("gSlot").value|0)) : 0;
