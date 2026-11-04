@@ -42,6 +42,8 @@ description: 接續或修改 Led_Control（iPixel Color 96×16 LED 繁中 Web Bl
 - 遙控器 9 鍵＝裝置格號 **111～119**（`BusinessControlModel.autoSendChannel`）。App 的「遙控器」頁（`BusinessRemoteControlActivity`，96 寬機型有）可編輯每鍵內容（GIF／圖片／文字）後整批送出：
   1. 若 MCU 版本 > 4：先送 `[長度,00,08,80,9,00,111,112,…,119]`（同 show_slot／輪播的 08 80 格式，用途推測為登記遙控器格）。MCU 版本來自 App 的 OTA 伺服器查詢，BLE 讀不到
   2. 每鍵間隔 300 ms，用一般送圖封包存進 slot＝111+鍵號−1（尾巴 `[02, slot]`，與網頁 sendFile 相同）
+- **本機（汽車版 20 鍵＋電源）走的是另一頁 `RemoteControlActivity`**：沒有編輯／上傳功能，按鍵只送 `06 00 07 80 k 語言`（k＝1～20）；預覽圖從雲端素材庫（category「驾驶」、label YK、file_lang cn/en）下載，只供顯示。→ 20 鍵動畫在 LED 韌體，App 也無法改。上面 111～119 那套是 9 鍵商店版，本機未必支援（未測）
+- App 介面語言含 zh 時語言 byte＝1（簡體），所以繁中 App 每按一次虛擬鍵都會把動畫切回簡體
 - 「恢復預設」＝把 APK 內建 `assets/remote/yk_anim_{en|cn}_16x96_{1..9}.gif` 再送一次（en 鍵 1 在 CID 0017／PID 01 機型改用 `_1_171.gif`）
 - App 虛擬遙控器按鍵：`06 00 07 80 k 語言`（k＝1～9；語言＝App 介面是中文時 1，否則 0）→ 這可能就是 App 一用就把動畫改回簡體的原因
 - 內建英文 9 鍵：BIG SALE、ON SALE、OPEN 24 HOURS、SHOP OPEN、WiFi FREE、QUICK BUY、WELCOME、DISCOUNTS、SHOPPING（96×16，0.8～4 秒）
