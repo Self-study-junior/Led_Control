@@ -14,6 +14,7 @@ https://self-study-junior.github.io/Led_Control/ ，連線、開關、亮度、�
 | `index.html` | 整個控制台（單檔，含協定、GIF 編碼器、UI） |
 | `gallery/gallery.json` | 圖庫清單 `[{file,name}]`，網頁啟動時讀 |
 | `gallery/*.gif / *.png` | 圖庫內容，**一律 96×16** |
+| `tools/static_to_black.py` | 把靜態圖紅底換黑（找不到紅底會報錯退出） |
 | `tools/make_marquee.py` | 產生 `gallery/marquee_taoyuan.gif`（在 repo 根目錄執行；需 Pillow＋Unifont） |
 | `.claude/skills/led-control/SKILL.md` | 接手用的技能說明（協定、坑、工作流程） |
 | `.nojekyll` | GitHub Pages 用 |
@@ -32,6 +33,7 @@ https://self-study-junior.github.io/Led_Control/ ，連線、開關、亮度、�
 - 圖庫上方：送出方式（單次顯示 slot 0／存成節目第 n 格，預設 2）、跑動速度（50%～200%，改 GIF 每格延遲，不動像素；壞 GIF 會報錯不送）
 - 圖庫下方：「顯示第 n 格」（`07 00 08 80 01 00 n`），用來從單次顯示切回節目
 - `marquee_taoyuan.gif` 改成每格 90 ms（原 60 ms，即使用者要的 2/3 速度），148 格、一輪約 13.3 秒；像素與舊版逐格一致
+- 兩張靜態圖紅底 (220,90,80) 改黑底（`tools/static_to_black.py`），只換紅底像素、其他顏色逐點不變；右側黃色 11/28 色塊保留
 - pypixelcolor 註解：slot 0＝不存，≥1 才存；`show_slot` 空格時裝置會輪播現有節目
 
 ## 踩過的坑
