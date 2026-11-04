@@ -29,7 +29,8 @@ description: 接續或修改 Led_Control（iPixel Color 96×16 LED 繁中 Web Bl
 - 圖片／GIF ✔：檔案切 12 KB 一段，每段：
   `[LEN_L LEN_H] [type 02=PNG|03=GIF, 00] [option 00首段|02後續] [size u32 LE] [CRC32 u32 LE] [GIF:02|PNG:00] [slot] [資料]`
   LEN＝整段長度（含 LEN 兩 byte）。每段等通知 `05 00 03 00 01`（收到段）／`… 03`（全部收完）。
-- 顯示某格 `07 00 08 80 01 00 n`；節目輪播 `[4+N] 00 08 80 N_L N_H [格號…]`（未實測）
+- 顯示某格 `07 00 08 80 01 00 n`；節目輪播 `[6+N] 00 08 80 N_L N_H [格號…]`（長度依 App 原始碼；未實測）
+- 遙控鍵 `06 00 07 80 k 語言`（k＝1～20，本機汽車版）
 - 刪除某格、清 ROM 見 pypixelcolor `commands/delete.py`、`clear.py`（clear 會清掉設定，**不要用**）
 - 警告：存進格子的資料若壞掉可能開機循環；先不存格測通再存
 - slot 0＝只顯示不存 ✔；slot ≥1＝存，開機依格號輪播 ✔；裝置讀不回內容，iPixel App 也看不到網頁存的 → 網頁節目表（localStorage）是唯一紀錄

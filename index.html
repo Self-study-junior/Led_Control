@@ -56,6 +56,12 @@ small{color:var(--mut)}
 </section>
 
 <section>
+  <h2>遙控器（虛擬按鍵）</h2>
+  <small>等同按實體遙控器：插播 LED 內建動畫，播完接回節目輪播。送的語言碼固定 0（英文），不會像 App 一樣改回簡體。（未實測）</small>
+  <div id="rc" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px"></div>
+</section>
+
+<section>
   <h2>2. 繁體跑馬燈</h2>
   <textarea id="txt">● 桃園 黃世杰 ● [#ffeb3b]團杰[/] ● 2026.11.28</textarea>
   <small>局部變色：用 <code>[#ff0000]文字[/]</code> 包起來。</small>
@@ -79,6 +85,13 @@ small{color:var(--mut)}
   <canvas id="pv" class="pv" width="96" height="16"></canvas>
   <div class="row"><small id="info"></small></div>
   <div class="row">
+    <label>送出方式
+      <select id="tMode"><option value="keep">持續顯示（不存）</option><option value="once">插播一次（播完回節目輪播）</option><option value="save">存成節目</option></select></label>
+    <label id="tSlotL" style="display:none">存到第 <input type="number" id="tSlot" value="1" min="1" max="255" style="width:62px"> 格</label>
+    <label id="tOnceL" style="display:none">靜態圖插播 <input type="number" id="tOnceS" value="5" min="1" max="600" style="width:62px"> 秒</label>
+  </div>
+  <small id="tNote"></small>
+  <div class="row">
     <button id="bPreview" class="sec">預覽</button>
     <button id="bSendText" class="act" disabled>送到 LED</button>
     <button id="bDl" class="sec">下載 GIF</button>
@@ -89,15 +102,18 @@ small{color:var(--mut)}
   <h2>圖庫（已設計好的 96×16）</h2>
   <div class="row">
     <label>送出方式
-      <select id="gMode"><option value="0">單次顯示（不存）</option><option value="save">存成節目</option></select></label>
-    <label id="gSlotL" style="display:none">存到第 <input type="number" id="gSlot" value="2" min="1" max="255" style="width:62px"> 格</label>
+      <select id="gMode"><option value="keep">持續顯示（不存）</option><option value="once">插播一次（播完回節目輪播）</option><option value="save">存成節目</option></select></label>
+    <label id="gSlotL" style="display:none">存到第 <input type="number" id="gSlot" value="1" min="1" max="255" style="width:62px"> 格</label>
+    <label id="gOnceL" style="display:none">靜態圖插播 <input type="number" id="gOnceS" value="5" min="1" max="600" style="width:62px"> 秒</label>
+  </div>
+  <small id="gNote"></small>
+  <div class="row">
     <label>跑動速度
       <select id="gSpeed">
         <option value="0.5">50%（慢）</option><option value="0.6667">67%</option><option value="0.8">80%</option>
         <option value="1" selected>100%（檔案原速）</option><option value="1.25">125%</option><option value="1.5">150%</option><option value="2">200%（快）</option>
       </select></label>
   </div>
-  <small id="gNote">單次顯示：LED 會一直播這張，直到送別的東西或用下面「顯示第 n 格」切回節目。</small>
   <div id="gal"></div>
   <small>要新增圖庫項目，把 96×16 的 GIF／PNG 放進 gallery/ 並登記到 gallery.json。</small>
 </section>
@@ -370,7 +386,10 @@ function makeText(){
   return lastGif;
 }
 $("bPreview").onclick=()=>{ try{makeText()}catch(e){log(e.message,"bad")} };
-$("bSendText").onclick=async()=>{ try{ await sendFile(makeText(),true); }catch(e){log(e.message,"bad")} };
+$("bSendText").onclick=async()=>{ try{
+  const g=makeText(), r=gifSpeed(g,1), txt=$("txt").value;
+  await deliver("t",{bytes:g,isGif:true,name:"跑馬燈："+txt.replace(/\[#?[0-9a-fA-F\/]*\]/g,"").trim().slice(0,20),durMs:r.n>1?r.total:0});
+}catch(e){log("✖ 跑馬燈送出失敗："+e.message,"bad")} };
 $("bDl").onclick=()=>{ const g=makeText(); const a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob([g],{type:"image/gif"})); a.download="led_96x16.gif"; a.click(); };
 
@@ -406,7 +425,7 @@ function gifSpeed(src, factor){
   if(String.fromCharCode(...b.slice(0,6)).slice(0,3)!=="GIF") throw new Error("不是 GIF");
   const skipSub=()=>{ while(true){ if(p>=b.length) throw new Error("GIF 結構截斷"); const n=b[p++]; if(n===0) return; p+=n; } };
   const lsd=b[10]; p=13; if(lsd&0x80) p+=3*(1<<((lsd&7)+1));
-  let n=0, from=new Set(), to=new Set();
+  let n=0, from=new Set(), to=new Set(), total=0;
   while(p<b.length){
     const t=b[p++];
     if(t===0x3B) break;
@@ -414,7 +433,7 @@ function gifSpeed(src, factor){
       const lab=b[p++];
       if(lab===0xF9 && b[p]===4){
         const d=b[p+2]|(b[p+3]<<8), nd=Math.max(2,Math.min(65535,Math.round(d/factor)));
-        b[p+2]=nd&255; b[p+3]=nd>>8; n++; from.add(d*10); to.add(nd*10);
+        b[p+2]=nd&255; b[p+3]=nd>>8; n++; from.add(d*10); to.add(nd*10); total+=nd*10;
       }
       skipSub();
     } else if(t===0x2C){
@@ -422,11 +441,47 @@ function gifSpeed(src, factor){
     } else throw new Error("GIF 區塊格式不認得（0x"+t.toString(16)+"），已停止，未送出");
   }
   if(n===0) throw new Error("GIF 裡找不到任何格延遲，未送出");
-  return {bytes:b, n, from:[...from].join("/"), to:[...to].join("/")};
+  return {bytes:b, n, total, from:[...from].join("/"), to:[...to].join("/")};
 }
-$("gMode").onchange=()=>{ const s=$("gMode").value==="save"; $("gSlotL").style.display=s?"":"none";
-  $("gNote").textContent = s ? "存成節目：寫進裝置記憶體，成功後自動記到下方「節目表」（預設填第一個空格）。iPixel App 看不到網頁存的節目；用 App 存的也不會出現在這裡，要自己補登。"
-                             : "單次顯示：LED 會一直播這張，直到送別的東西或用下面「顯示第 n 格」切回節目。"; };
+const NOTE={keep:"持續顯示：LED 一直播這張，直到送別的東西或用節目表「顯示」切回。不會存。",
+  once:"插播一次：先送出顯示，等播完一輪（GIF 依檔案長度；靜態圖依右邊秒數）後，自動切回節目表裡記錄的所有格號輪播。播完前請不要關掉這頁或手機螢幕。（未實測）",
+  save:"存成節目：寫進裝置記憶體，成功後自動記到「節目表」（預設填第一個空格）。iPixel App 看不到網頁存的節目。"};
+function bindMode(pre){ const f=()=>{ const m=$(pre+"Mode").value; $(pre+"SlotL").style.display=m==="save"?"":"none";
+  $(pre+"OnceL").style.display=m==="once"?"":"none"; $(pre+"Note").textContent=NOTE[m]; }; $(pre+"Mode").onchange=f; f(); }
+bindMode("t"); bindMode("g");
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let onceToken=0;
+// 統一送出：keep＝slot 0；once＝slot 0 → 等一輪 → 08 80 切回節目表全部格號；save＝存第 n 格並記錄
+async function deliver(pre, o){  // o:{bytes,isGif,name,durMs}
+  const mode=$(pre+"Mode").value;
+  if(mode==="save"){
+    const slot=Math.max(1,Math.min(255,+$(pre+"Slot").value|0));
+    if(progs[slot] && !confirm(`第 ${slot} 格已記為「${progs[slot].name}」，要覆蓋嗎？`)) return false;
+    log(`${o.name}：存到第 ${slot} 格`);
+    const ok=await sendFile(o.bytes,o.isGif,slot);
+    if(ok){ progs[slot]={name:o.name,thumb:await thumbOf(o.bytes,o.isGif),at:tsNow()};
+      if(saveProgs()) log(`已記錄：第 ${slot} 格＝${o.name}`,"ok"); renderProgs(); }
+    else log(`第 ${slot} 格傳送沒確認成功，未寫入紀錄（裝置上可能是舊的或半截資料）`,"bad");
+    return ok;
+  }
+  if(mode==="once"){
+    const list=Object.keys(progs).map(Number).filter(n=>n>=1&&n<=255).sort((a,b)=>a-b);
+    if(!list.length){ log("✖ 節目表沒有任何紀錄，插播完不知道要切回哪些格；請先補登節目，或改用「持續顯示」","bad"); return false; }
+    const ms=Math.round(o.durMs>0 ? o.durMs : (+$(pre+"OnceS").value||5)*1000);
+    log(`${o.name}：插播一次（約 ${(ms/1000).toFixed(1)} 秒）`);
+    const ok=await sendFile(o.bytes,o.isGif,0); if(!ok){ log("✖ 插播沒送成功，不切換","bad"); return false; }
+    const my=++onceToken;
+    log(`插播中… ${(ms/1000).toFixed(1)} 秒後切回節目 ${list.map(n=>String(n).padStart(3,"0")).join("、")}`);
+    await sleep(ms);
+    if(my!==onceToken){ log("插播期間又送了別的插播，這次不切回（以最後一次為準）"); return true; }
+    if(!wr){ log("✖ 插播結束時已斷線，沒切回節目；請重新連線後按節目表「顯示」或斷電重開","bad"); return false; }
+    const N=list.length, r=await sendCmd("切回節目輪播",[6+N,0,8,0x80,N&255,N>>8,...list]);
+    if(r) log("✔ 已送出切回節目輪播，請看 LED 是否回到節目","ok");
+    return true;
+  }
+  log(`${o.name}：持續顯示`);
+  return await sendFile(o.bytes,o.isGif,0);
+}
 $("bShow").onclick=()=>{ const n=Math.max(1,Math.min(255,+$("showN").value|0)); sendCmd("顯示第 "+n+" 格",[7,0,8,0x80,1,0,n]); };
 
 // ===== 節目表（localStorage；裝置無法讀回，紀錄可能與實際不符）=====
@@ -490,6 +545,13 @@ $("fImport").onchange=async e=>{
   e.target.value="";
 };
 
+// ===== 遙控器虛擬按鍵：06 00 07 80 k 語言（App RemoteControlActivity；語言固定 0＝英文）=====
+const RC=["緊急情況","關閉遠光燈","左轉","臨時停靠","右轉","微笑","減速慢行","保持車距","車內有嬰兒","禮讓行人",
+  "倒車入庫","車內有孕婦","等紅燈","自動駕駛","追尾","實習","禁止鳴笛","雨天路滑","下車","危險警示"];
+RC.forEach((t,i)=>{ const b=document.createElement("button"); b.className="sec act"; b.disabled=!wr;
+  b.style.cssText="padding:8px 4px;font-size:13px"; b.textContent=(i+1)+" "+t;
+  b.onclick=()=>sendCmd(`遙控鍵 ${i+1}「${t}」`,[6,0,7,0x80,i+1,0]); $("rc").appendChild(b); });
+
 // ===== 圖庫 =====
 (async()=>{
   const box=$("gal");
@@ -503,19 +565,12 @@ $("fImport").onchange=async e=>{
       d.querySelector("button").onclick=async()=>{ try{
         const b=new Uint8Array(await (await fetch("gallery/"+it.file,{cache:"no-store"})).arrayBuffer());
         const gif=b[0]===0x47&&b[1]===0x49&&b[2]===0x46;
-        const sp=+$("gSpeed").value, save=$("gMode").value==="save";
-        const slot=save? Math.max(1,Math.min(255,+$("gSlot").value|0)) : 0;
-        let data=b, info="";
-        if(gif && sp!==1){ const r=gifSpeed(b,sp); data=r.bytes; info=`，速度 ${Math.round(sp*100)}%（每格 ${r.from} → ${r.to} ms，${r.n} 格）`; }
-        else if(!gif && sp!==1) info="（靜態圖，速度不適用）";
-        if(save && progs[slot] && !confirm(`第 ${slot} 格已記為「${progs[slot].name}」，要覆蓋嗎？`)) return;
-        log("圖庫："+it.name+(save?`，存到第 ${slot} 格`:"，單次顯示")+info);
-        const ok=await sendFile(data,gif,slot);
-        if(ok && save){
-          progs[slot]={name:it.name+(gif&&sp!==1?`（速度 ${Math.round(sp*100)}%）`:""),thumb:await thumbOf(data,gif),at:tsNow()};
-          if(saveProgs()) log(`已記錄：第 ${slot} 格＝${progs[slot].name}`,"ok");
-          renderProgs();
-        } else if(!ok && save) log(`第 ${slot} 格傳送沒確認成功，未寫入紀錄（裝置上可能是舊的或半截資料）`,"bad");
+        const sp=+$("gSpeed").value;
+        let data=b, nm=it.name, dur=0;
+        if(gif){ const r=gifSpeed(b,sp); data=r.bytes; dur=r.n>1?r.total:0;
+          if(sp!==1){ nm+=`（速度 ${Math.round(sp*100)}%）`; log(`速度 ${Math.round(sp*100)}%：每格 ${r.from} → ${r.to} ms，${r.n} 格`); } }
+        else if(sp!==1) log("（靜態圖，速度不適用）");
+        await deliver("g",{bytes:data,isGif:gif,name:nm,durMs:dur});
       }catch(e){ log("✖ 圖庫送出失敗："+e.message,"bad"); } };
       box.appendChild(d);
     }
