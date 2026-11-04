@@ -47,9 +47,8 @@ small{color:var(--mut)}
     <span id="briV">60</span>
   </div>
   <div class="row">
-    <label>遙控器動畫語言碼 <input type="number" id="lang" value="0" min="0" max="255" style="width:66px"></label>
-    <button class="sec act" id="bLang" disabled>套用</button>
-    <small>0＝英文（已確認）；其他值待測</small>
+    <button class="sec act" id="bLang" disabled>遙控器動畫改回英文</button>
+    <small>用過 iPixel App 後按一次（App 會改回簡體）；實測 0＝英文、1～5＝簡體，沒有繁體</small>
   </div>
   <div id="connMsg" style="margin-top:6px"></div>
   <small id="support"></small>
@@ -233,10 +232,10 @@ $("bConnect").onclick = ()=>connect(false);
 $("bScanAll").onclick = ()=>connect(true);
 $("bDisc").onclick = ()=>{ dev?.gatt?.disconnect(); };
 $("bLang").onclick = async ()=>{
-  const L = Math.max(0,Math.min(255,+$("lang").value|0)), n = new Date();
-  const r = await sendCmd("設定語言碼 "+L,[8,0,1,0x80,n.getHours(),n.getMinutes(),n.getSeconds(),L]);
+  const n = new Date();  // 語言碼固定 0＝英文；1～5 實測皆為簡體，不開放輸入
+  const r = await sendCmd("遙控器動畫設為英文（語言碼 0）",[8,0,1,0x80,n.getHours(),n.getMinutes(),n.getSeconds(),0]);
   if(r && r.length>=5) log("裝置回應型號碼 "+r[4]+(r[4]===132?"（96×16）":""), "ok");
-  log("請按遙控器任一鍵，記下語言碼 "+L+" 出現的是哪套動畫");
+  log("請按遙控器任一鍵確認內建動畫為英文");
 };
 $("bOn").onclick  = ()=>sendCmd("開機",[5,0,7,1,1]);
 $("bOff").onclick = ()=>sendCmd("關機",[5,0,7,1,0]);
