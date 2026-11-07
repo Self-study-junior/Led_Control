@@ -137,7 +137,7 @@ small{color:var(--mut)}
     <small>空格的話裝置會輪播現有節目</small>
   </div>
   <div class="row">
-    <button class="sec act" id="bBack" disabled>回到節目輪播（斷線重連）</button>
+    <button class="sec act" id="bBack" disabled>回到節目輪播（斷開藍牙）</button>
     <small>LED 停在持續顯示／插播內容時，按這個讓它回到輪播</small>
   </div>
 </section>
@@ -240,7 +240,7 @@ async function writeRaw(bytes){
   }
 }
 async function sendCmd(name, bytes, expectAck=true){
-  if(!wr) return log("尚未連線","bad");
+  if(!(await ensureConn())) return null;
   log("→ "+name+"  "+hex(bytes));
   // 不等回應的指令不能掛 waiter，否則會吃掉下一個送圖的 ACK
   const p = expectAck ? waitNotify(3000) : null;
@@ -252,7 +252,7 @@ async function sendCmd(name, bytes, expectAck=true){
 
 // 圖片/GIF 封包：每 12KB 一個 window，每個 window 等一次 ACK
 async function sendFile(bytes, isGif, slot=0){
-  if(!wr) return log("尚未連線","bad");
+  if(!(await ensureConn())) return null;
   const size = le32(bytes.length), crc = le32(crc32(bytes));
   const total = Math.ceil(bytes.length/WINDOW);
   log(`送出 ${isGif?"GIF":"PNG"} ${(bytes.length/1024).toFixed(1)} KB，共 ${total} 段，CRC ${crc32(bytes).toString(16)}`);
@@ -282,15 +282,28 @@ async function sendFile(bytes, isGif, slot=0){
 // ===== 連線 =====
 $("support").textContent = navigator.bluetooth ? "此瀏覽器支援 Web Bluetooth。" :
   "此瀏覽器不支援 Web Bluetooth。iPhone 請用 Bluefy 瀏覽器開這頁；Android／電腦請用 Chrome 或 Edge。";
+// standby：已選過裝置但目前沒連著（例如為了回到節目輪播而主動斷線）；下次送出時自動重連
+let standby=false;
 function setConn(on){
-  document.querySelectorAll(".act").forEach(b=>b.disabled=!on);
+  if(on) standby=false;
+  const usable = on || (standby && !!dev);
+  document.querySelectorAll(".act").forEach(b=>b.disabled=!usable);
   $("bDisc").disabled=!on; $("bConnect").disabled=on; $("bScanAll").disabled=on;
-  $("status").textContent = on ? "已連線："+(dev?.name||"") : "未連線";
+  $("status").textContent = on ? "已連線："+(dev?.name||"") : (usable ? "待命：送出時自動連線（"+(dev?.name||"")+"）" : "未連線");
   $("status").className = on ? "ok" : "";
 }
-function setBusy(b){ document.querySelectorAll(".act").forEach(x=>x.disabled=b||!wr); }
+function setBusy(b){ document.querySelectorAll(".act").forEach(x=>x.disabled=b||!(wr||(standby&&dev))); }
+async function ensureConn(){
+  if(wr) return true;
+  if(standby && dev){
+    log("自動重新連線（LED 會短暫顯示連線圖示）…");
+    try{ await openGatt(); return true; }
+    catch(e){ standby=false; setConn(false); log("✖ 自動連線失敗："+errMsg(e)+"，請按「連線 LED」","bad"); return false; }
+  }
+  log("尚未連線","bad"); return false;
+}
 function connMsg(t,cls){ const e=$("connMsg"); e.textContent=t; e.className=cls||""; }
-let quietDisc=false;
+let quietDisc=false, userDisc=false;
 async function openGatt(){
   const srv = await dev.gatt.connect();
   let svcs = [];
@@ -304,20 +317,17 @@ async function openGatt(){
   await nt.startNotifications(); nt.addEventListener("characteristicvaluechanged", onNotify);
   setConn(true); connMsg("已連線","ok");
 }
-// 11/08 實測：斷開藍牙再重連，LED 會從 slot 0 的內容回到節目輪播（08 80 清單、顯示空格、關開機都無效）
+// 11/08 實測：斷開藍牙後 LED 從 slot 0 內容回到節目輪播（08 80 清單、顯示空格、關開機都無效）。
+// 重連時 LED 會顯示連線圖示，所以只斷線、進待命，等下次送出時才自動重連。
 async function backToPrograms(){
-  if(!dev) { log("✖ 還沒選過裝置，無法重連","bad"); return false; }
+  if(!dev) { log("✖ 還沒選過裝置","bad"); return false; }
   quietDisc=true;
   try{
     log("斷開藍牙，讓 LED 回到節目輪播…");
     try{ dev.gatt.disconnect(); }catch(e){}
-    wr=null; setConn(false);
-    await sleep(1500);
-    log("自動重新連線…"); await openGatt();
-    log("✔ 已斷線重連，請看 LED 是否回到節目輪播","ok"); return true;
-  }catch(e){
-    log("✖ 自動重連失敗："+errMsg(e)+"。LED 應該已回到輪播；要繼續操作請按「連線 LED」","bad"); connMsg("未連線");
-    return false;
+    wr=null; standby=true; setConn(false);
+    await sleep(300);
+    log("✔ 已斷開；LED 應回到節目輪播。下次送出時會自動重新連線","ok"); return true;
   }finally{ quietDisc=false; }
 }
 async function connect(all){
@@ -331,7 +341,9 @@ async function connect(all){
                     : {filters:[{namePrefix:"LED"}], optionalServices:SERVICE_CANDIDATES};
     dev = await navigator.bluetooth.requestDevice(opt);
     dev.addEventListener("gattserverdisconnected",()=>{ wr=null; setConn(false);
-      if(quietDisc) log("（主動斷線，讓 LED 回到節目輪播）"); else log("裝置已中斷","bad"); });
+      if(userDisc){ userDisc=false; standby=false; setConn(false); log("已中斷連線"); return; }
+      standby=true; setConn(false);
+      if(quietDisc) log("（主動斷線，讓 LED 回到節目輪播）"); else log("裝置已中斷（下次送出時會自動重連）","bad"); });
     log("選到裝置："+(dev.name||"(無名稱)")+"，連線中…"); connMsg("連線中…");
     await openGatt();
     // 不再自動送「讀取裝置資訊」：該指令最後一個 byte 是語言，送 0 會把遙控器內建動畫改成英文
@@ -339,12 +351,12 @@ async function connect(all){
   }catch(e){
     const m = e.name==="NotFoundError" ? (all?"沒有選裝置，或附近找不到裝置。":"找不到 LED 開頭的裝置。請先完全關掉 iPixel Color App（它連著時 LED 不會被別人看到），再試；或改按「列出全部藍牙裝置」。")
             : errMsg(e);
-    connMsg("連線失敗："+m,"bad"); log("連線失敗："+e.name+" "+errMsg(e),"bad");
+    connMsg("連線失敗："+m,"bad"); log("連線失敗："+(e&&e.name&&e.name!==errMsg(e)?e.name+" ":"")+errMsg(e),"bad");
   }
 }
 $("bConnect").onclick = ()=>connect(false);
 $("bScanAll").onclick = ()=>connect(true);
-$("bDisc").onclick = ()=>{ dev?.gatt?.disconnect(); };
+$("bDisc").onclick = ()=>{ userDisc=true; dev?.gatt?.disconnect(); };
 $("bLang").onclick = async ()=>{
   const n = new Date();  // 語言碼固定 0＝英文；1～5 實測皆為簡體，不開放輸入
   const r = await sendCmd("遙控器動畫設為英文（語言碼 0）",[8,0,1,0x80,n.getHours(),n.getMinutes(),n.getSeconds(),0]);
@@ -538,10 +550,10 @@ async function deliver(pre, o){  // o:{bytes,isGif,name,durMs}
     log(`${o.name}：插播一次（約 ${(ms/1000).toFixed(1)} 秒）`);
     const ok=await sendFile(o.bytes,o.isGif,0); if(!ok){ log("✖ 插播沒送成功，不切換","bad"); return false; }
     const my=++onceToken;
-    log(`插播中… ${(ms/1000).toFixed(1)} 秒後斷線重連，讓 LED 回到節目輪播`);
+    log(`插播中… ${(ms/1000).toFixed(1)} 秒後斷開藍牙，讓 LED 回到節目輪播`);
     await sleep(ms);
     if(my!==onceToken){ log("插播期間又送了別的插播，這次不切回（以最後一次為準）"); return true; }
-    if(!wr){ log("插播結束時藍牙已斷線；斷線本身會讓 LED 回到節目輪播，請看 LED 確認","bad"); return false; }
+    if(!wr){ log("插播結束時藍牙已經斷開；LED 應已回到節目輪播"); return true; }
     return await backToPrograms();
   }
   log(`${o.name}：持續顯示`);
