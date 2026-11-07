@@ -27,6 +27,7 @@ https://self-study-junior.github.io/Led_Control/ 。連線、開關、亮度、�
 | `tools/make_marquee.py` | 產生 `gallery/marquee_taoyuan.gif`（repo 根目錄執行；需 Pillow＋Unifont；每格 90 ms） |
 | `tools/make_keep_distance.py` | 產生 `gallery/keep_distance.png`（照使用者照片構圖重畫；文字 3×7 點陣） |
 | `tools/make_keep_distance_2.py` | 產生 `gallery/keep_distance_2.png`（使用者第二張照片構圖） |
+| `tools/make_keep_distance_anim.py` | 產生 `gallery/keep_distance_anim.gif`（4 格×2000 ms＝8 秒；A 字／B 》〉》《〈《 交替，雙眼固定） |
 | `tools/static_to_black.py` | 靜態圖紅底換黑（找不到紅底會報錯退出） |
 | `.claude/skills/led-control/SKILL.md` | 技能說明（含 App 反編譯結果） |
 | `.nojekyll` | GitHub Pages 用 |
@@ -81,6 +82,7 @@ https://self-study-junior.github.io/Led_Control/ 。連線、開關、亮度、�
 
 - 圖庫第 4 張 `keep_distance.png`（左眼、紅橘藍三箭頭、KEEP DISTANCE、右眼）。使用者要存成**節目第 5 格**，由使用者在網頁圖庫選「存成節目」第 5 格送出 ⚠️未實測
 - 圖庫第 5 張 `keep_distance_2.png`（使用者第二張照片：眼、KEEP DISTANCE、紅＋兩藍箭頭、眼）；兩版擇一存節目 5，使用者未決定
+- 圖庫第 6 張 `keep_distance_anim.gif`：使用者要「約 6 秒、每 2 秒交換」；6 秒無法在循環時維持 2 秒交換，改做 8 秒（A B A B）。⚠️每格 2000 ms 的長延遲裝置是否照播未實測（同待驗證「GIF 延遲」）
 
 ## 下一步候選（等上面結果）
 
