@@ -136,13 +136,9 @@ small{color:var(--mut)}
     <button class="sec act" id="bShow" disabled>切換</button>
     <small>空格的話裝置會輪播現有節目</small>
   </div>
-  <div style="border-top:1px solid #444;margin-top:8px;padding-top:8px">
-    <b>切回輪播實驗</b> <small>（插播後 LED 停在插播內容時，逐一試；每按一個看 15 秒，有輪到第二個節目才算成功）</small>
-    <div class="row">
-      <button class="sec act" id="bRetA" disabled>A：顯示空格 200</button>
-      <button class="sec act" id="bRetB" disabled>B：顯示第 1 格</button>
-      <button class="sec act" id="bRetC" disabled>C：關機再開機</button>
-    </div>
+  <div class="row">
+    <button class="sec act" id="bBack" disabled>回到節目輪播（斷線重連）</button>
+    <small>LED 停在持續顯示／插播內容時，按這個讓它回到輪播</small>
   </div>
 </section>
 
@@ -294,6 +290,36 @@ function setConn(on){
 }
 function setBusy(b){ document.querySelectorAll(".act").forEach(x=>x.disabled=b||!wr); }
 function connMsg(t,cls){ const e=$("connMsg"); e.textContent=t; e.className=cls||""; }
+let quietDisc=false;
+async function openGatt(){
+  const srv = await dev.gatt.connect();
+  let svcs = [];
+  try{ svcs = await srv.getPrimaryServices(); }catch(e){ log("讀服務清單失敗："+errMsg(e),"bad"); }
+  log("找到服務："+(svcs.map(s=>s.uuid).join(", ")||"(無)"));
+  wr=null;
+  for (const s of svcs){
+    try{ wr = await s.getCharacteristic(WRITE_UUID); nt = await s.getCharacteristic(NOTIFY_UUID); break; }catch(e){ wr=null; }
+  }
+  if(!wr) throw new Error("找不到 fa02 寫入特徵值，請把紀錄裡「找到服務」那行截圖給開發者");
+  await nt.startNotifications(); nt.addEventListener("characteristicvaluechanged", onNotify);
+  setConn(true); connMsg("已連線","ok");
+}
+// 11/08 實測：斷開藍牙再重連，LED 會從 slot 0 的內容回到節目輪播（08 80 清單、顯示空格、關開機都無效）
+async function backToPrograms(){
+  if(!dev) { log("✖ 還沒選過裝置，無法重連","bad"); return false; }
+  quietDisc=true;
+  try{
+    log("斷開藍牙，讓 LED 回到節目輪播…");
+    try{ dev.gatt.disconnect(); }catch(e){}
+    wr=null; setConn(false);
+    await sleep(1500);
+    log("自動重新連線…"); await openGatt();
+    log("✔ 已斷線重連，請看 LED 是否回到節目輪播","ok"); return true;
+  }catch(e){
+    log("✖ 自動重連失敗："+errMsg(e)+"。LED 應該已回到輪播；要繼續操作請按「連線 LED」","bad"); connMsg("未連線");
+    return false;
+  }finally{ quietDisc=false; }
+}
 async function connect(all){
   if(!navigator.bluetooth){ connMsg("這個瀏覽器沒有藍牙功能，請用 Bluefy 開。","bad"); return; }
   connMsg("正在開啟藍牙選擇視窗…（若沒跳出，請看下方說明）");
@@ -304,18 +330,10 @@ async function connect(all){
     const opt = all ? {acceptAllDevices:true, optionalServices:SERVICE_CANDIDATES}
                     : {filters:[{namePrefix:"LED"}], optionalServices:SERVICE_CANDIDATES};
     dev = await navigator.bluetooth.requestDevice(opt);
-    dev.addEventListener("gattserverdisconnected",()=>{ wr=null; setConn(false); log("裝置已中斷","bad"); });
+    dev.addEventListener("gattserverdisconnected",()=>{ wr=null; setConn(false);
+      if(quietDisc) log("（主動斷線，讓 LED 回到節目輪播）"); else log("裝置已中斷","bad"); });
     log("選到裝置："+(dev.name||"(無名稱)")+"，連線中…"); connMsg("連線中…");
-    const srv = await dev.gatt.connect();
-    let svcs = [];
-    try{ svcs = await srv.getPrimaryServices(); }catch(e){ log("讀服務清單失敗："+errMsg(e),"bad"); }
-    log("找到服務："+(svcs.map(s=>s.uuid).join(", ")||"(無)"));
-    for (const s of svcs){
-      try{ wr = await s.getCharacteristic(WRITE_UUID); nt = await s.getCharacteristic(NOTIFY_UUID); break; }catch(e){ wr=null; }
-    }
-    if(!wr) throw new Error("找不到 fa02 寫入特徵值，請把紀錄裡「找到服務」那行截圖給開發者");
-    await nt.startNotifications(); nt.addEventListener("characteristicvaluechanged", onNotify);
-    setConn(true); connMsg("已連線","ok");
+    await openGatt();
     // 不再自動送「讀取裝置資訊」：該指令最後一個 byte 是語言，送 0 會把遙控器內建動畫改成英文
     log("已連線（未送語言設定，不影響遙控器內建動畫）","ok");
   }catch(e){
@@ -516,18 +534,15 @@ async function deliver(pre, o){  // o:{bytes,isGif,name,durMs}
   if(mode==="keep") log(`${o.name}：持續顯示（不存）`);
   if(mode==="once"){
     const list=Object.keys(progs).map(Number).filter(n=>n>=1&&n<=255).sort((a,b)=>a-b);
-    if(!list.length){ log("✖ 節目表沒有任何紀錄，插播完不知道要切回哪些格；請先補登節目，或改用「持續顯示」","bad"); return false; }
     const ms=Math.round(o.durMs>0 ? o.durMs : (+$(pre+"OnceS").value||5)*1000);
     log(`${o.name}：插播一次（約 ${(ms/1000).toFixed(1)} 秒）`);
     const ok=await sendFile(o.bytes,o.isGif,0); if(!ok){ log("✖ 插播沒送成功，不切換","bad"); return false; }
     const my=++onceToken;
-    log(`插播中… ${(ms/1000).toFixed(1)} 秒後切回節目 ${list.map(n=>String(n).padStart(3,"0")).join("、")}`);
+    log(`插播中… ${(ms/1000).toFixed(1)} 秒後斷線重連，讓 LED 回到節目輪播`);
     await sleep(ms);
     if(my!==onceToken){ log("插播期間又送了別的插播，這次不切回（以最後一次為準）"); return true; }
-    if(!wr){ log("✖ 插播結束時已斷線，沒切回節目；請重新連線後按節目表「顯示」或斷電重開","bad"); return false; }
-    const N=list.length, r=await sendCmd("切回節目輪播",[6+N,0,8,0x80,N&255,N>>8,...list]);
-    if(r) log("已送出切回指令；⚠️ 11/08 實測這個指令裝置會回收到但不會切回輪播，請改用節目表下方「切回輪播實驗」A／B／C","bad");
-    return true;
+    if(!wr){ log("插播結束時藍牙已斷線；斷線本身會讓 LED 回到節目輪播，請看 LED 確認","bad"); return false; }
+    return await backToPrograms();
   }
   log(`${o.name}：持續顯示`);
   return await sendFile(o.bytes,o.isGif,0);
@@ -653,14 +668,8 @@ $("bClearLog").onclick=()=>{
   logEl.textContent=""; log("已清除紀錄","ok"); logInfo();
 };
 
-// ===== 切回輪播實驗（11/08：多格清單 08 80 N 收到 ACK 但沒切回）=====
-$("bRetA").onclick=async()=>{ log("實驗 A：顯示空格 200（文件：空格→輪播所有節目）"+(progs[200]?"⚠️ 節目表記錄第 200 格不是空的":""));
-  const r=await sendCmd("顯示第 200 格",[7,0,8,0x80,1,0,200]); if(r) log("A 已送出，請看 15 秒：有沒有依序輪播節目"); };
-$("bRetB").onclick=async()=>{ log("實驗 B：顯示第 1 格");
-  const r=await sendCmd("顯示第 1 格",[7,0,8,0x80,1,0,1]); if(r) log("B 已送出，請看 15 秒：先顯示第 1 格後，有沒有接著換第 2 格"); };
-$("bRetC").onclick=async()=>{ log("實驗 C：關機 → 1.5 秒 → 開機");
-  const a=await sendCmd("關機",[5,0,7,1,0]); await sleep(1500);
-  const b=await sendCmd("開機",[5,0,7,1,1]); if(wr) log("C 已送出，請看 15 秒：開機後是插播內容還是節目輪播"); };
+// ===== 回到節目輪播 =====
+$("bBack").onclick=()=>backToPrograms();
 </script>
 </body>
 </html>
