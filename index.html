@@ -136,6 +136,14 @@ small{color:var(--mut)}
     <button class="sec act" id="bShow" disabled>切換</button>
     <small>空格的話裝置會輪播現有節目</small>
   </div>
+  <div style="border-top:1px solid #444;margin-top:8px;padding-top:8px">
+    <b>切回輪播實驗</b> <small>（插播後 LED 停在插播內容時，逐一試；每按一個看 15 秒，有輪到第二個節目才算成功）</small>
+    <div class="row">
+      <button class="sec act" id="bRetA" disabled>A：顯示空格 200</button>
+      <button class="sec act" id="bRetB" disabled>B：顯示第 1 格</button>
+      <button class="sec act" id="bRetC" disabled>C：關機再開機</button>
+    </div>
+  </div>
 </section>
 
 <section>
@@ -188,7 +196,7 @@ function log(msg, cls){
   const e={t:stamp(),m:String(msg),c:cls||""};
   logBuf.push(e); if(logBuf.length>LOG_MAX) logBuf.splice(0,logBuf.length-LOG_MAX);
   try{ localStorage.setItem(LOG_KEY,JSON.stringify(logBuf)); logSaveFail=false; }
-  catch(err){ if(!logSaveFail){ logSaveFail=true; logLine({t:stamp(),m:"✖ 紀錄無法保存到手機（"+err.message+"），重新整理後會不見",c:"bad"}); } }
+  catch(err){ if(!logSaveFail){ logSaveFail=true; logLine({t:stamp(),m:"✖ 紀錄無法保存到手機（"+errMsg(err)+"），重新整理後會不見",c:"bad"}); } }
   logLine(e);
   while(logEl.childElementCount>LOG_MAX+50) logEl.removeChild(logEl.firstChild);
   logEl.scrollTop=1e9;
@@ -196,6 +204,8 @@ function log(msg, cls){
 if(logBuf.length){ for(const e of logBuf) logLine(e);
   const sep=document.createElement("div"); sep.style.color="#888"; sep.textContent="──── 以上是之前保存的紀錄（"+logBuf.length+" 行）────"; logEl.appendChild(sep); }
 function logText(){ return logBuf.map(e=>e.t+"  "+e.m).join("\n"); }
+// Bluefy 有時丟出非 Error 物件（errMsg(e) 是 undefined），一律轉成看得懂的文字
+const errMsg = e => (e && (e.message || e.name)) || (typeof e==="string" ? e : JSON.stringify(e)) || "未知錯誤";
 const hex = b => Array.from(b).map(x=>x.toString(16).padStart(2,"0")).join(" ");
 
 // CRC32 (IEEE)
@@ -216,10 +226,21 @@ function waitNotify(ms){
     setTimeout(()=>{ if(!done){done=true; ackWaiters=ackWaiters.filter(x=>x!==f); res(null);} }, ms);
   });
 }
+const WRITE_TIMEOUT = 5000;
 async function writeRaw(bytes){
   for(let p=0;p<bytes.length;p+=CHUNK){
     const c = bytes.slice(p,p+CHUNK);
-    if (wr.writeValueWithResponse) await wr.writeValueWithResponse(c); else await wr.writeValue(c);
+    const w = wr.writeValueWithResponse ? wr.writeValueWithResponse(c) : wr.writeValue(c);
+    let t; const to = new Promise((_,rej)=>{ t=setTimeout(()=>rej(new Error("寫入逾時 "+WRITE_TIMEOUT/1000+" 秒")),WRITE_TIMEOUT); });
+    try{ await Promise.race([w,to]); }
+    catch(e){
+      if(String(errMsg(e)).startsWith("寫入逾時")){
+        wr=null; setConn(false);
+        log("✖ 藍牙寫入沒有回應，連線可能已經斷了（手機鎖屏或離太遠常見）。請按「連線 LED」重新連線","bad");
+      }
+      throw e;
+    }
+    finally{ clearTimeout(t); }
   }
 }
 async function sendCmd(name, bytes, expectAck=true){
@@ -228,7 +249,7 @@ async function sendCmd(name, bytes, expectAck=true){
   // 不等回應的指令不能掛 waiter，否則會吃掉下一個送圖的 ACK
   const p = expectAck ? waitNotify(3000) : null;
   try{ await writeRaw(new Uint8Array(bytes)); }
-  catch(e){ log("✖ "+name+" 寫入失敗："+e.message,"bad"); return null; }
+  catch(e){ log("✖ "+name+" 寫入失敗："+errMsg(e),"bad"); return null; }
   if (expectAck){ const r = await p; if(!r) log("✖ "+name+" 沒有回應（不一定失敗，請看 LED 有沒有變）","bad"); return r; }
   return true;
 }
@@ -258,7 +279,7 @@ async function sendFile(bytes, isGif, slot=0){
     const fin = await waitNotify(ACK_TIMEOUT);
     if(fin && fin[0]===5 && fin[4]===3){ log("✔ 裝置確認收完","ok"); return true; }
     log("✖ 沒收到最後確認（code 3）；若 LED 已更新可忽略","bad"); return false;
-  } catch(e){ log("✖ 傳送錯誤："+e.message,"bad"); return false; }
+  } catch(e){ log("✖ 傳送錯誤："+errMsg(e),"bad"); return false; }
   finally{ setBusy(false); }
 }
 
@@ -287,7 +308,7 @@ async function connect(all){
     log("選到裝置："+(dev.name||"(無名稱)")+"，連線中…"); connMsg("連線中…");
     const srv = await dev.gatt.connect();
     let svcs = [];
-    try{ svcs = await srv.getPrimaryServices(); }catch(e){ log("讀服務清單失敗："+e.message,"bad"); }
+    try{ svcs = await srv.getPrimaryServices(); }catch(e){ log("讀服務清單失敗："+errMsg(e),"bad"); }
     log("找到服務："+(svcs.map(s=>s.uuid).join(", ")||"(無)"));
     for (const s of svcs){
       try{ wr = await s.getCharacteristic(WRITE_UUID); nt = await s.getCharacteristic(NOTIFY_UUID); break; }catch(e){ wr=null; }
@@ -299,8 +320,8 @@ async function connect(all){
     log("已連線（未送語言設定，不影響遙控器內建動畫）","ok");
   }catch(e){
     const m = e.name==="NotFoundError" ? (all?"沒有選裝置，或附近找不到裝置。":"找不到 LED 開頭的裝置。請先完全關掉 iPixel Color App（它連著時 LED 不會被別人看到），再試；或改按「列出全部藍牙裝置」。")
-            : e.message;
-    connMsg("連線失敗："+m,"bad"); log("連線失敗："+e.name+" "+e.message,"bad");
+            : errMsg(e);
+    connMsg("連線失敗："+m,"bad"); log("連線失敗："+e.name+" "+errMsg(e),"bad");
   }
 }
 $("bConnect").onclick = ()=>connect(false);
@@ -412,11 +433,11 @@ function makeText(){
     + (frames.length>400?"（格數很多，若傳不進去請加大「每格移」）":"");
   return lastGif;
 }
-$("bPreview").onclick=()=>{ try{makeText()}catch(e){log(e.message,"bad")} };
+$("bPreview").onclick=()=>{ try{makeText()}catch(e){log(errMsg(e),"bad")} };
 $("bSendText").onclick=async()=>{ try{
   const g=makeText(), r=gifSpeed(g,1), txt=$("txt").value;
   await deliver("t",{bytes:g,isGif:true,name:"跑馬燈："+txt.replace(/\[#?[0-9a-fA-F\/]*\]/g,"").trim().slice(0,20),durMs:r.n>1?r.total:0});
-}catch(e){log("✖ 跑馬燈送出失敗："+e.message,"bad")} };
+}catch(e){log("✖ 跑馬燈送出失敗："+errMsg(e),"bad")} };
 $("bDl").onclick=()=>{ const g=makeText(); const a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob([g],{type:"image/gif"})); a.download="led_96x16.gif"; a.click(); };
 
@@ -444,7 +465,8 @@ $("file").onchange=async e=>{
   }
 };
 $("fit").onchange=()=>{ if($("file").files[0]) $("file").onchange({target:$("file")}); };
-$("bSendImg").onclick=()=>{ if(!imgBytes) return log("先選一張圖","bad"); sendFile(imgBytes,imgIsGif); };
+$("bSendImg").onclick=()=>{ if(!imgBytes) return log("先選一張圖","bad");
+  log("自訂圖片："+($("file").files[0]?.name||"(未命名)")+"：持續顯示（不存）"); sendFile(imgBytes,imgIsGif); };
 
 // ===== GIF 速度：沿著 GIF 區塊結構改每格的 Graphic Control Extension 延遲（不重新編碼像素）=====
 function gifSpeed(src, factor){
@@ -491,6 +513,7 @@ async function deliver(pre, o){  // o:{bytes,isGif,name,durMs}
     else log(`第 ${slot} 格傳送沒確認成功，未寫入紀錄（裝置上可能是舊的或半截資料）`,"bad");
     return ok;
   }
+  if(mode==="keep") log(`${o.name}：持續顯示（不存）`);
   if(mode==="once"){
     const list=Object.keys(progs).map(Number).filter(n=>n>=1&&n<=255).sort((a,b)=>a-b);
     if(!list.length){ log("✖ 節目表沒有任何紀錄，插播完不知道要切回哪些格；請先補登節目，或改用「持續顯示」","bad"); return false; }
@@ -503,7 +526,7 @@ async function deliver(pre, o){  // o:{bytes,isGif,name,durMs}
     if(my!==onceToken){ log("插播期間又送了別的插播，這次不切回（以最後一次為準）"); return true; }
     if(!wr){ log("✖ 插播結束時已斷線，沒切回節目；請重新連線後按節目表「顯示」或斷電重開","bad"); return false; }
     const N=list.length, r=await sendCmd("切回節目輪播",[6+N,0,8,0x80,N&255,N>>8,...list]);
-    if(r) log("✔ 已送出切回節目輪播，請看 LED 是否回到節目","ok");
+    if(r) log("已送出切回指令；⚠️ 11/08 實測這個指令裝置會回收到但不會切回輪播，請改用節目表下方「切回輪播實驗」A／B／C","bad");
     return true;
   }
   log(`${o.name}：持續顯示`);
@@ -514,9 +537,9 @@ $("bShow").onclick=()=>{ const n=Math.max(1,Math.min(255,+$("showN").value|0)); 
 // ===== 節目表（localStorage；裝置無法讀回，紀錄可能與實際不符）=====
 const PKEY="ledPrograms.v1";
 let progs={};
-try{ progs=JSON.parse(localStorage.getItem(PKEY)||"{}"); }catch(e){ log("✖ 讀取節目紀錄失敗："+e.message+"（節目表會是空的）","bad"); }
+try{ progs=JSON.parse(localStorage.getItem(PKEY)||"{}"); }catch(e){ log("✖ 讀取節目紀錄失敗："+errMsg(e)+"（節目表會是空的）","bad"); }
 function saveProgs(){ try{ localStorage.setItem(PKEY,JSON.stringify(progs)); return true; }
-  catch(e){ log("✖ 節目紀錄沒存成功："+e.message+"，請立刻匯出備份或手動記下","bad"); return false; } }
+  catch(e){ log("✖ 節目紀錄沒存成功："+errMsg(e)+"，請立刻匯出備份或手動記下","bad"); return false; } }
 const tsNow=()=>{ const d=new Date(),z=n=>String(n).padStart(2,"0"); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`; };
 function nextFree(){ let n=1; while(progs[n]) n++; return n; }
 async function thumbOf(bytes, isGif){
@@ -525,7 +548,7 @@ async function thumbOf(bytes, isGif){
     const img=new Image(); await new Promise((ok,ng)=>{img.onload=ok;img.onerror=()=>ng(new Error("圖片解碼失敗"));img.src=url;});
     const c=document.createElement("canvas"); c.width=W; c.height=H; c.getContext("2d").drawImage(img,0,0,W,H);
     URL.revokeObjectURL(url); return c.toDataURL("image/png");
-  }catch(e){ log("縮圖產生失敗（不影響傳送）："+e.message,"bad"); return null; }
+  }catch(e){ log("縮圖產生失敗（不影響傳送）："+errMsg(e),"bad"); return null; }
 }
 function renderProgs(){
   const box=$("prog"); box.innerHTML="";
@@ -568,7 +591,7 @@ $("fImport").onchange=async e=>{
     if(typeof o!=="object"||Array.isArray(o)||!Object.entries(o).every(([k,v])=>/^\d+$/.test(k)&&v&&typeof v.name==="string")) throw new Error("格式不對");
     if(!confirm(`匯入會取代目前 ${Object.keys(progs).length} 筆紀錄，改成檔案裡的 ${Object.keys(o).length} 筆，確定？`)) return;
     progs=o; if(saveProgs()) log("已匯入節目紀錄","ok"); renderProgs();
-  }catch(err){ log("✖ 匯入失敗："+err.message,"bad"); }
+  }catch(err){ log("✖ 匯入失敗："+errMsg(err),"bad"); }
   e.target.value="";
 };
 
@@ -599,11 +622,11 @@ RC.forEach((t,i)=>{ const b=document.createElement("button"); b.className="sec a
           if(sp!==1){ nm+=`（速度 ${Math.round(sp*100)}%）`; log(`速度 ${Math.round(sp*100)}%：每格 ${r.from} → ${r.to} ms，${r.n} 格`); } }
         else if(sp!==1) log("（靜態圖，速度不適用）");
         await deliver("g",{bytes:data,isGif:gif,name:nm,durMs:dur});
-      }catch(e){ log("✖ 圖庫送出失敗："+e.message,"bad"); } };
+      }catch(e){ log("✖ 圖庫送出失敗："+errMsg(e),"bad"); } };
       box.appendChild(d);
     }
     if(wr) setBusy(false);
-  }catch(e){ box.textContent="圖庫載入失敗："+e.message; }
+  }catch(e){ box.textContent="圖庫載入失敗："+errMsg(e); }
 })();
 
 renderProgs();
@@ -629,6 +652,15 @@ $("bClearLog").onclick=()=>{
   logBuf=[]; try{ localStorage.removeItem(LOG_KEY); }catch(e){}
   logEl.textContent=""; log("已清除紀錄","ok"); logInfo();
 };
+
+// ===== 切回輪播實驗（11/08：多格清單 08 80 N 收到 ACK 但沒切回）=====
+$("bRetA").onclick=async()=>{ log("實驗 A：顯示空格 200（文件：空格→輪播所有節目）"+(progs[200]?"⚠️ 節目表記錄第 200 格不是空的":""));
+  const r=await sendCmd("顯示第 200 格",[7,0,8,0x80,1,0,200]); if(r) log("A 已送出，請看 15 秒：有沒有依序輪播節目"); };
+$("bRetB").onclick=async()=>{ log("實驗 B：顯示第 1 格");
+  const r=await sendCmd("顯示第 1 格",[7,0,8,0x80,1,0,1]); if(r) log("B 已送出，請看 15 秒：先顯示第 1 格後，有沒有接著換第 2 格"); };
+$("bRetC").onclick=async()=>{ log("實驗 C：關機 → 1.5 秒 → 開機");
+  const a=await sendCmd("關機",[5,0,7,1,0]); await sleep(1500);
+  const b=await sendCmd("開機",[5,0,7,1,1]); if(wr) log("C 已送出，請看 15 秒：開機後是插播內容還是節目輪播"); };
 </script>
 </body>
 </html>
