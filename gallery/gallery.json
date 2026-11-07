@@ -1,5 +1,6 @@
 [
-  {"file":"marquee_taoyuan.gif","name":"桃園 黃世杰 團杰 跑馬燈（黑底・號次1）"},
-  {"file":"static_name_A.png","name":"黃世杰 團杰（靜態・黑底）"},
-  {"file":"static_taoyuan_B.png","name":"TAOYUAN 團杰（靜態・黑底）"}
+  {"file": "marquee_taoyuan.gif", "name": "桃園 黃世杰 團杰 跑馬燈（黑底・號次1）"},
+  {"file": "static_name_A.png", "name": "黃世杰 團杰（靜態・黑底）"},
+  {"file": "static_taoyuan_B.png", "name": "TAOYUAN 團杰（靜態・黑底）"},
+  {"file": "keep_distance.png", "name": "KEEP DISTANCE（靜態・黑底）"}
 ]

@@ -25,6 +25,7 @@ https://self-study-junior.github.io/Led_Control/ 。連線、開關、亮度、�
 | `gallery/gallery.json` | 圖庫清單 `[{file,name}]` |
 | `gallery/*.gif / *.png` | 圖庫內容，**一律 96×16** |
 | `tools/make_marquee.py` | 產生 `gallery/marquee_taoyuan.gif`（repo 根目錄執行；需 Pillow＋Unifont；每格 90 ms） |
+| `tools/make_keep_distance.py` | 產生 `gallery/keep_distance.png`（照使用者照片構圖重畫；文字 3×7 點陣） |
 | `tools/static_to_black.py` | 靜態圖紅底換黑（找不到紅底會報錯退出） |
 | `.claude/skills/led-control/SKILL.md` | 技能說明（含 App 反編譯結果） |
 | `.nojekyll` | GitHub Pages 用 |
@@ -74,6 +75,10 @@ https://self-study-junior.github.io/Led_Control/ 。連線、開關、亮度、�
 6. **GIF 延遲**：90 ms 版是否比 60 ms 明顯慢；速度選單是否有效
 7. **跑馬燈實機效果**：黑底、紅色號次「1」實心圓、紅圈「卜」；「卜」可能要調大小或改空心
 8. （低機率實驗，使用者要求才做）GIF 寫進 slot 111，看遙控器第 1 鍵會不會變
+
+## 2026-11-08 新增
+
+- 圖庫第 4 張 `keep_distance.png`（左眼、紅橘藍三箭頭、KEEP DISTANCE、右眼）。使用者要存成**節目第 5 格**，由使用者在網頁圖庫選「存成節目」第 5 格送出 ⚠️未實測
 
 ## 下一步候選（等上面結果）
 
