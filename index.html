@@ -153,6 +153,11 @@ small{color:var(--mut)}
 <section>
   <h2>紀錄</h2>
   <div id="log"></div>
+  <div class="row">
+    <button class="sec" id="bCopyLog">複製紀錄</button>
+    <button class="sec" id="bClearLog">清除紀錄</button>
+    <small id="logInfo"></small>
+  </div>
   <small>只有看到「✔ 裝置確認收完」才算成功；「✖ 逾時」代表裝置沒回應，畫面不會變。</small>
 </section>
 </main>
@@ -170,8 +175,27 @@ const W = 96, H = 16;
 
 const $ = id => document.getElementById(id);
 const logEl = $("log");
-function log(msg, cls){ const d=document.createElement("div"); if(cls) d.className=cls;
-  d.textContent=new Date().toLocaleTimeString("zh-TW",{hour12:false})+"  "+msg; logEl.appendChild(d); logEl.scrollTop=1e9; }
+// ===== 紀錄（保存最近 LOG_MAX 行在這支手機的 localStorage）=====
+const LOG_KEY="ledLog.v1", LOG_MAX=500;
+let logBuf=[];
+try{ const o=JSON.parse(localStorage.getItem(LOG_KEY)||"[]"); if(Array.isArray(o)) logBuf=o.slice(-LOG_MAX); }catch(e){ logBuf=[]; }
+const stamp=()=>{ const d=new Date(),z=n=>String(n).padStart(2,"0");
+  return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}`; };
+function logLine(e){ const d=document.createElement("div"); if(e.c) d.className=e.c;
+  d.textContent=e.t.slice(5).replace("-","/")+"  "+e.m; logEl.appendChild(d); }
+let logSaveFail=false;
+function log(msg, cls){
+  const e={t:stamp(),m:String(msg),c:cls||""};
+  logBuf.push(e); if(logBuf.length>LOG_MAX) logBuf.splice(0,logBuf.length-LOG_MAX);
+  try{ localStorage.setItem(LOG_KEY,JSON.stringify(logBuf)); logSaveFail=false; }
+  catch(err){ if(!logSaveFail){ logSaveFail=true; logLine({t:stamp(),m:"✖ 紀錄無法保存到手機（"+err.message+"），重新整理後會不見",c:"bad"}); } }
+  logLine(e);
+  while(logEl.childElementCount>LOG_MAX+50) logEl.removeChild(logEl.firstChild);
+  logEl.scrollTop=1e9;
+}
+if(logBuf.length){ for(const e of logBuf) logLine(e);
+  const sep=document.createElement("div"); sep.style.color="#888"; sep.textContent="──── 以上是之前保存的紀錄（"+logBuf.length+" 行）────"; logEl.appendChild(sep); }
+function logText(){ return logBuf.map(e=>e.t+"  "+e.m).join("\n"); }
 const hex = b => Array.from(b).map(x=>x.toString(16).padStart(2,"0")).join(" ");
 
 // CRC32 (IEEE)
@@ -581,6 +605,26 @@ RC.forEach((t,i)=>{ const b=document.createElement("button"); b.className="sec a
 renderProgs();
 makeText();
 log("就緒。按「連線 LED」，在清單中選 LED_BLE_ 開頭的裝置。");
+
+// ===== 紀錄按鈕 =====
+function logInfo(){ $("logInfo").textContent="保存最近 "+LOG_MAX+" 行，目前 "+logBuf.length+" 行（只在這支手機）"; }
+logInfo(); setInterval(logInfo,3000);
+$("bCopyLog").onclick=async()=>{
+  const t=logText();
+  if(!t){ log("紀錄是空的，沒有可複製的內容","bad"); return; }
+  try{ await navigator.clipboard.writeText(t); log("✔ 已複製 "+logBuf.length+" 行紀錄，可以直接貼給 Claude","ok"); return; }catch(e){}
+  try{ const ta=document.createElement("textarea"); ta.value=t; ta.style.position="fixed"; ta.style.opacity="0";
+    document.body.appendChild(ta); ta.focus(); ta.select(); ta.setSelectionRange(0,t.length);
+    const ok=document.execCommand("copy"); ta.remove();
+    if(ok){ log("✔ 已複製 "+logBuf.length+" 行紀錄，可以直接貼給 Claude","ok"); return; }
+  }catch(e){}
+  log("✖ 這個瀏覽器不讓網頁寫剪貼簿，請長按紀錄區手動選取複製","bad");
+};
+$("bClearLog").onclick=()=>{
+  if(!confirm("清除這支手機保存的全部 "+logBuf.length+" 行紀錄？節目表不受影響。")) return;
+  logBuf=[]; try{ localStorage.removeItem(LOG_KEY); }catch(e){}
+  logEl.textContent=""; log("已清除紀錄","ok"); logInfo();
+};
 </script>
 </body>
 </html>
