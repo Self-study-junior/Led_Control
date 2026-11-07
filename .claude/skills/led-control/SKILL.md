@@ -63,6 +63,8 @@ description: 接續或修改 Led_Control（iPixel Color 96×16 LED 繁中 Web Bl
 
 - 作者：`Self-study-junior <774630+Self-study-junior@users.noreply.github.com>`
 - commit 訊息繁中；推 main
+- repo 已改名 `Led_Control`：clone 後先 `git remote set-url origin https://github.com/Self-study-junior/Led_Control.git`，不然 push 會被拒（`This repository moved`）；偶發 GitHub 500 等 10～20 秒重推
+- 推送權限：Claude 帳號的 GitHub 連線要是 Self-study-junior
 - 不要碰 `Self-study-junior/Junior`（兒子的複習網站）
 
 ## 使用者偏好
