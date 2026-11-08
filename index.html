@@ -66,7 +66,13 @@ small{color:var(--mut)}
 </section>
 
 <section>
-  <h2>3. 繁體跑馬燈</h2>
+  <h2>3. 遙控器（虛擬按鍵）</h2>
+  <small>等同按實體遙控器：插播 LED 內建動畫，播完接回節目輪播。送的語言碼固定 0（英文），不會像 App 一樣改回簡體。（11/08 實測 ✔）</small>
+  <div id="rc" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px"></div>
+</section>
+
+<section>
+  <h2>4. 繁體跑馬燈</h2>
   <textarea id="txt">保持車距安全駕駛</textarea>
   <small>局部變色：用 <code>[#ff0000]文字[/]</code> 包起來。</small>
   <div class="row">
@@ -103,7 +109,7 @@ small{color:var(--mut)}
 </section>
 
 <section>
-  <h2>4. 已設計圖庫</h2>
+  <h2>5. 已設計圖庫</h2>
   <div class="row">
     <label>送出方式
       <select id="gMode"><option value="keep">持續顯示（不存）</option><option value="once">插播一次（播完回節目輪播）</option><option value="save">存成節目</option></select></label>
@@ -123,7 +129,7 @@ small{color:var(--mut)}
 </section>
 
 <section>
-  <h2>5. 節目表（網頁自己的紀錄）</h2>
+  <h2>6. 節目表（網頁自己的紀錄）</h2>
   <small>裝置不會回報存了什麼，iPixel App 也看不到網頁存的節目，所以由網頁自己記。紀錄只在這支手機的 Bluefy 裡，清除網站資料就沒了，請定期「匯出備份」。開機後裝置會依格號輪播所有已存節目。</small>
   <div id="prog" style="margin-top:6px"></div>
   <div class="row">
@@ -147,7 +153,7 @@ small{color:var(--mut)}
 </section>
 
 <section>
-  <h2>6. 送自己的圖片／GIF</h2>
+  <h2>7. 送自己的圖片／GIF</h2>
   <input type="file" id="file" accept="image/*">
   <div class="row">
     <label>非 96×16 的靜態圖：
@@ -159,7 +165,7 @@ small{color:var(--mut)}
 </section>
 
 <section>
-  <h2>7. 紀錄</h2>
+  <h2>8. 紀錄</h2>
   <div id="log"></div>
   <div class="row">
     <button class="sec" id="bCopyLog">複製紀錄</button>
@@ -167,12 +173,6 @@ small{color:var(--mut)}
     <small id="logInfo"></small>
   </div>
   <small>只有看到「✔ 裝置確認收完」才算成功；「✖ 逾時」代表裝置沒回應，畫面不會變。</small>
-</section>
-
-<section>
-  <h2>附：遙控器（虛擬按鍵）</h2>
-  <small>等同按實體遙控器：插播 LED 內建動畫，播完接回節目輪播。送的語言碼固定 0（英文），不會像 App 一樣改回簡體。（11/08 實測 ✔）</small>
-  <div id="rc" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px"></div>
 </section>
 </main>
 
