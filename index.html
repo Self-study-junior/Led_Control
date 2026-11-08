@@ -56,18 +56,22 @@ small{color:var(--mut)}
 </section>
 
 <section>
-  <h2>遙控器（虛擬按鍵）</h2>
-  <small>等同按實體遙控器：插播 LED 內建動畫，播完接回節目輪播。送的語言碼固定 0（英文），不會像 App 一樣改回簡體。（未實測）</small>
-  <div id="rc" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px"></div>
+  <h2>2. 單次插播</h2>
+  <small>按「插播」：送出那張圖（不存）→ 動態圖跑完一次、靜態圖顯示下面秒數 → 自動送內建動畫 6（微笑）→ 微笑播完 LED 自己回節目輪播。（回輪播這一步未實測）</small>
+  <div id="insList" style="margin-top:6px"></div>
+  <div class="row">
+    <button class="sec" id="insAdd">＋ 新增一組</button>
+    <label>靜態圖顯示 <input type="number" id="insSec" value="5" min="1" max="600" style="width:56px"> 秒</label>
+  </div>
 </section>
 
 <section>
-  <h2>2. 繁體跑馬燈</h2>
-  <textarea id="txt">● 桃園 黃世杰 ● [#ffeb3b]團杰[/] ● 2026.11.28</textarea>
+  <h2>3. 繁體跑馬燈</h2>
+  <textarea id="txt">保持車距安全駕駛</textarea>
   <small>局部變色：用 <code>[#ff0000]文字[/]</code> 包起來。</small>
   <div class="row">
     <label>字色 <input type="color" id="fg" value="#ffffff"></label>
-    <label>底色 <input type="color" id="bg" value="#dc5a50"></label>
+    <label>底色 <input type="color" id="bg" value="#000000"></label>
     <label>字型
       <select id="font">
         <option value='"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif'>黑體</option>
@@ -99,7 +103,7 @@ small{color:var(--mut)}
 </section>
 
 <section>
-  <h2>圖庫（已設計好的 96×16）</h2>
+  <h2>4. 已設計圖庫</h2>
   <div class="row">
     <label>送出方式
       <select id="gMode"><option value="keep">持續顯示（不存）</option><option value="once">插播一次（播完回節目輪播）</option><option value="save">存成節目</option></select></label>
@@ -119,7 +123,7 @@ small{color:var(--mut)}
 </section>
 
 <section>
-  <h2>節目表（網頁自己的紀錄）</h2>
+  <h2>5. 節目表（網頁自己的紀錄）</h2>
   <small>裝置不會回報存了什麼，iPixel App 也看不到網頁存的節目，所以由網頁自己記。紀錄只在這支手機的 Bluefy 裡，清除網站資料就沒了，請定期「匯出備份」。開機後裝置會依格號輪播所有已存節目。</small>
   <div id="prog" style="margin-top:6px"></div>
   <div class="row">
@@ -143,7 +147,7 @@ small{color:var(--mut)}
 </section>
 
 <section>
-  <h2>3. 送自己的圖片／GIF</h2>
+  <h2>6. 送自己的圖片／GIF</h2>
   <input type="file" id="file" accept="image/*">
   <div class="row">
     <label>非 96×16 的靜態圖：
@@ -155,7 +159,7 @@ small{color:var(--mut)}
 </section>
 
 <section>
-  <h2>紀錄</h2>
+  <h2>7. 紀錄</h2>
   <div id="log"></div>
   <div class="row">
     <button class="sec" id="bCopyLog">複製紀錄</button>
@@ -163,6 +167,12 @@ small{color:var(--mut)}
     <small id="logInfo"></small>
   </div>
   <small>只有看到「✔ 裝置確認收完」才算成功；「✖ 逾時」代表裝置沒回應，畫面不會變。</small>
+</section>
+
+<section>
+  <h2>附：遙控器（虛擬按鍵）</h2>
+  <small>等同按實體遙控器：插播 LED 內建動畫，播完接回節目輪播。送的語言碼固定 0（英文），不會像 App 一樣改回簡體。（11/08 實測 ✔）</small>
+  <div id="rc" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px"></div>
 </section>
 </main>
 
@@ -525,13 +535,28 @@ function gifSpeed(src, factor){
   return {bytes:b, n, total, from:[...from].join("/"), to:[...to].join("/")};
 }
 const NOTE={keep:"持續顯示：LED 一直播這張，直到送別的東西或用節目表「顯示」切回。不會存。",
-  once:"插播一次：先送出顯示，等播完一輪（GIF 依檔案長度；靜態圖依右邊秒數）後，自動切回節目表裡記錄的所有格號輪播。播完前請不要關掉這頁或手機螢幕。（未實測）",
+  once:"插播一次：送出顯示 → 播完一輪（GIF 依檔案長度；靜態圖依右邊秒數）→ 自動送內建動畫 6（微笑），微笑播完 LED 回節目輪播。播完前請不要關掉這頁或手機螢幕。",
   save:"存成節目：寫進裝置記憶體，成功後自動記到「節目表」（預設填第一個空格）。iPixel App 看不到網頁存的節目。"};
 function bindMode(pre){ const f=()=>{ const m=$(pre+"Mode").value; $(pre+"SlotL").style.display=m==="save"?"":"none";
   $(pre+"OnceL").style.display=m==="once"?"":"none"; $(pre+"Note").textContent=NOTE[m]; }; $(pre+"Mode").onchange=f; f(); }
 bindMode("t"); bindMode("g");
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 let onceToken=0;
+const BACK_KEY=6;   // 內建動畫 6＝微笑；播完韌體自動回節目輪播
+// 插播一次：slot 0 送出 → 等一輪 → 送內建動畫 6 → 韌體播完回節目輪播
+async function insertOnce(o, staticSec){
+  const ms=Math.round(o.durMs>0 ? o.durMs : staticSec*1000);
+  log(`${o.name}：插播一次（約 ${(ms/1000).toFixed(1)} 秒）`);
+  const ok=await sendFile(o.bytes,o.isGif,0); if(!ok){ log("✖ 插播沒送成功，不切換","bad"); return false; }
+  const my=++onceToken;
+  log(`插播中… ${(ms/1000).toFixed(1)} 秒後送內建動畫 ${BACK_KEY}（${RC[BACK_KEY-1]}）`);
+  await sleep(ms);
+  if(my!==onceToken){ log("插播期間又送了別的插播，這次不切回（以最後一次為準）"); return true; }
+  const r=await sendCmd(`內建動畫 ${BACK_KEY}「${RC[BACK_KEY-1]}」`,[6,0,7,0x80,BACK_KEY,0],false);
+  if(!r){ log("✖ 內建動畫沒送出；LED 會停在插播內容，請按節目表「回到節目輪播（斷線重連）」","bad"); return false; }
+  log(`✔ 已送內建動畫 ${BACK_KEY}，播完應自動回節目輪播；若停在插播內容，按節目表「回到節目輪播（斷線重連）」`,"ok");
+  return true;
+}
 // 統一送出：keep＝slot 0；once＝slot 0 → 等一輪 → 08 80 切回節目表全部格號；save＝存第 n 格並記錄
 async function deliver(pre, o){  // o:{bytes,isGif,name,durMs}
   const mode=$(pre+"Mode").value;
@@ -545,18 +570,7 @@ async function deliver(pre, o){  // o:{bytes,isGif,name,durMs}
     else log(`第 ${slot} 格傳送沒確認成功，未寫入紀錄（裝置上可能是舊的或半截資料）`,"bad");
     return ok;
   }
-  if(mode==="once"){
-    const list=Object.keys(progs).map(Number).filter(n=>n>=1&&n<=255).sort((a,b)=>a-b);
-    const ms=Math.round(o.durMs>0 ? o.durMs : (+$(pre+"OnceS").value||5)*1000);
-    log(`${o.name}：插播一次（約 ${(ms/1000).toFixed(1)} 秒）`);
-    const ok=await sendFile(o.bytes,o.isGif,0); if(!ok){ log("✖ 插播沒送成功，不切換","bad"); return false; }
-    const my=++onceToken;
-    log(`插播中… ${(ms/1000).toFixed(1)} 秒後斷線重連，讓 LED 回到節目輪播`);
-    await sleep(ms);
-    if(my!==onceToken){ log("插播期間又送了別的插播，這次不切回（以最後一次為準）"); return true; }
-    if(!wr){ log("插播結束時藍牙已斷線；LED 不會自己回輪播，正在重連…"); return await backToPrograms(); }
-    return await backToPrograms();
-  }
+  if(mode==="once") return await insertOnce(o, +$(pre+"OnceS").value||5);
   log(`${o.name}：持續顯示（不存；要回輪播請按「回到節目輪播」）`);
   return await sendFile(o.bytes,o.isGif,0);
 }
@@ -632,30 +646,61 @@ RC.forEach((t,i)=>{ const b=document.createElement("button"); b.className="sec a
     if(ok) log("✔ 已送出（遙控鍵裝置不回應屬正常；實測會播英文動畫並自動回節目輪播）","ok"); }; $("rc").appendChild(b); });
 
 // ===== 圖庫 =====
+let GAL=[];
+async function loadGal(it, sp){
+  const b=new Uint8Array(await (await fetch("gallery/"+it.file,{cache:"no-store"})).arrayBuffer());
+  const gif=b[0]===0x47&&b[1]===0x49&&b[2]===0x46;
+  let data=b, nm=it.name, dur=0;
+  if(gif){ const r=gifSpeed(b,sp); data=r.bytes; dur=r.n>1?r.total:0;
+    if(sp!==1){ nm+=`（速度 ${Math.round(sp*100)}%）`; log(`速度 ${Math.round(sp*100)}%：每格 ${r.from} → ${r.to} ms，${r.n} 格`); } }
+  else if(sp!==1) log("（靜態圖，速度不適用）");
+  return {bytes:data,isGif:gif,name:nm,durMs:dur};
+}
 (async()=>{
   const box=$("gal");
   try{
-    const list=await (await fetch("gallery/gallery.json",{cache:"no-store"})).json();
-    for(const it of list){
+    GAL=await (await fetch("gallery/gallery.json",{cache:"no-store"})).json();
+    GAL.forEach((it,idx)=>{
       const d=document.createElement("div"); d.className="gi";
       d.innerHTML=`<img alt=""><div class="nm"></div><button class="act" disabled>送出</button>`;
       d.querySelector("img").src="gallery/"+it.file+"?t="+Date.now();
-      d.querySelector(".nm").textContent=it.name;
-      d.querySelector("button").onclick=async()=>{ try{
-        const b=new Uint8Array(await (await fetch("gallery/"+it.file,{cache:"no-store"})).arrayBuffer());
-        const gif=b[0]===0x47&&b[1]===0x49&&b[2]===0x46;
-        const sp=+$("gSpeed").value;
-        let data=b, nm=it.name, dur=0;
-        if(gif){ const r=gifSpeed(b,sp); data=r.bytes; dur=r.n>1?r.total:0;
-          if(sp!==1){ nm+=`（速度 ${Math.round(sp*100)}%）`; log(`速度 ${Math.round(sp*100)}%：每格 ${r.from} → ${r.to} ms，${r.n} 格`); } }
-        else if(sp!==1) log("（靜態圖，速度不適用）");
-        await deliver("g",{bytes:data,isGif:gif,name:nm,durMs:dur});
-      }catch(e){ log("✖ 圖庫送出失敗："+errMsg(e),"bad"); } };
+      d.querySelector(".nm").textContent=(idx+1)+". "+it.name;
+      d.querySelector("button").onclick=async()=>{ try{ await deliver("g",await loadGal(it,+$("gSpeed").value)); }
+        catch(e){ log("✖ 圖庫送出失敗："+errMsg(e),"bad"); } };
       box.appendChild(d);
-    }
-    if(wr) setBusy(false);
-  }catch(e){ box.textContent="圖庫載入失敗："+errMsg(e); }
+    });
+    renderIns();
+    if(wr||standby) setBusy(false);
+  }catch(e){ box.textContent="圖庫載入失敗："+errMsg(e); $("insList").textContent="圖庫載入失敗，無法設定插播"; }
 })();
+
+// ===== 單次插播（設定存在這支手機 localStorage）=====
+const IKEY="ledInserts.v1";
+let INS=null;
+try{ INS=JSON.parse(localStorage.getItem(IKEY)||"null"); }catch(e){ INS=null; }
+if(!Array.isArray(INS)||!INS.length) INS=[{file:"slow_car.gif"}];   // 預設 01＝圖庫 7
+function saveIns(){ try{ localStorage.setItem(IKEY,JSON.stringify(INS)); }catch(e){ log("✖ 插播設定沒存成功："+errMsg(e),"bad"); } }
+function renderIns(){
+  const box=$("insList"); box.textContent="";
+  INS.forEach((x,i)=>{
+    const d=document.createElement("div"); d.className="gi";
+    const opts=GAL.map((g,k)=>`<option value="${k}">${k+1}. ${g.name.replace(/[<&]/g,"")}</option>`).join("");
+    d.innerHTML=`<b style="width:26px">${String(i+1).padStart(2,"0")}</b><img alt="" style="width:34%"><select style="flex:1;min-width:0"></select>`+
+      `<button class="act" ${wr||standby?"":"disabled"}>插播</button><button class="sec" title="刪除">✕</button>`;
+    const sel=d.querySelector("select"); sel.innerHTML=opts;
+    let k=GAL.findIndex(g=>g.file===x.file);
+    if(k<0){ k=0; log(`插播 ${String(i+1).padStart(2,"0")} 原本的圖「${x.file}」不在圖庫裡，改成第 1 張`,"bad"); x.file=GAL[0]?.file; saveIns(); }
+    sel.value=k; d.querySelector("img").src="gallery/"+GAL[k].file;
+    sel.onchange=()=>{ x.file=GAL[+sel.value].file; d.querySelector("img").src="gallery/"+x.file; saveIns(); };
+    const [bGo,bDel]=d.querySelectorAll("button");
+    bGo.onclick=async()=>{ try{ const it=GAL[+sel.value]; log(`插播 ${String(i+1).padStart(2,"0")}：`+it.name);
+      await insertOnce(await loadGal(it,1), +$("insSec").value||5); }catch(e){ log("✖ 插播失敗："+errMsg(e),"bad"); } };
+    bDel.onclick=()=>{ if(INS.length===1){ log("至少要留一組插播","bad"); return; }
+      if(!confirm(`刪除插播 ${String(i+1).padStart(2,"0")}？`)) return; INS.splice(i,1); saveIns(); renderIns(); };
+    box.appendChild(d);
+  });
+}
+$("insAdd").onclick=()=>{ INS.push({file:GAL[0]?.file}); saveIns(); renderIns(); };
 
 renderProgs();
 makeText();
