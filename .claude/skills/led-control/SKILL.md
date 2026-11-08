@@ -55,6 +55,7 @@ description: 接續或修改 Led_Control（iPixel Color 96×16 LED 繁中 Web Bl
 - 一律 96×16，黑色＝不亮
 - 中文用 Unifont 16px 點陣（`/usr/share/fonts/opentype/unifont/unifont.otf`），不要用反鋸齒字型縮小
 - 跑馬燈：前面補 96px 黑，每格移 2px、90ms（使用者嫌 60ms 太快）、loop=0、≤8 色
+- GIF 一律用 `tools/gifenc.py` 存（全域色表、每格完整畫面）。PIL `save_all` 會每格帶局部色表＋只存變動區塊，多色時實機卡頓跳格（11/08）
 - 只改速度時用網頁的速度選單或改 GIF 延遲，不要重畫像素
 - 新圖放 `gallery/`，登記到 `gallery/gallery.json`；產生程式放 `tools/`
 - 交付前把整條放大 8 倍（NEAREST）自己看過再推

@@ -45,8 +45,9 @@ frames=[]
 for i,o in enumerate(range(0,tw+W,STEP)):
     on=(i//BLINK)%2==0
     frames.append(full[1 if on else 0].crop((o,0,o+W,H)))
-pal=[f.convert("P",palette=Image.ADAPTIVE,colors=16) for f in frames]
-pal[0].save("gallery/slow_car.gif",save_all=True,append_images=pal[1:],duration=DELAY,loop=0,optimize=False,disposal=1)
+sys.path.insert(0,"tools"); import gifenc
+ncol=gifenc.save(frames,DELAY,"gallery/slow_car.gif")   # 全域色表、完整畫面（PIL 局部色表版在實機卡頓）
+print("全域色表顏色數",ncol)
 print(f"整條 {tw}px，{len(frames)} 格，一輪約 {len(frames)*DELAY/1000:.1f} 秒")
 out=sys.argv[1] if len(sys.argv)>1 else "."
 S[1].resize((tw*8,H*8),Image.NEAREST).save(f"{out}/slow_car_strip.png")
