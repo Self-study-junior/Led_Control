@@ -45,8 +45,8 @@ def arrows():
     return im
 A,B=text(),arrows()
 frames=[A,B,A,B]
-pal=[f.convert("P",palette=Image.ADAPTIVE,colors=8) for f in frames]
-pal[0].save("gallery/keep_distance_anim.gif",save_all=True,append_images=pal[1:],duration=HOLD,loop=0,optimize=False,disposal=1)
+import sys; sys.path.insert(0,"tools"); import gifenc
+gifenc.save(frames,HOLD,"gallery/keep_distance_anim.gif")   # 全域色表、完整畫面（見 SKILL.md 製圖規範）
 import sys
 out=sys.argv[1] if len(sys.argv)>1 else "."
 for n,f in (("A",A),("B",B)): f.resize((W*8,H*8),Image.NEAREST).save(f"{out}/kda_{n}.png")

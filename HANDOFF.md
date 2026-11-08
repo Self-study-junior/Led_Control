@@ -29,6 +29,7 @@ https://self-study-junior.github.io/Led_Control/ 。連線、開關、亮度、�
 | `tools/make_keep_distance_2.py` | 產生 `gallery/keep_distance_2.png`（使用者第二張照片構圖） |
 | `tools/make_keep_distance_anim.py` | 產生 `gallery/keep_distance_anim.gif`（4 格×2000 ms＝8 秒；A 字／B 》〉》《〈《 交替，雙眼固定） |
 | `tools/make_slow_car.py` | 產生 `gallery/slow_car.gif`（⚠ 前有慢車 🚗，請勿追尾閃燈 ⚠；241px 跑馬燈、90 ms、三角約 0.54 秒閃一次、一輪 15.2 秒） |
+| `tools/gifscan.py` | 檢查 GIF 結構（全域色表、全幅、局部色表、延遲） |
 | `tools/gifenc.py` | LED 友善 GIF 編碼器（全域色表、完整畫面）；新 GIF 一律用它，不要用 PIL save_all |
 | `tools/static_to_black.py` | 靜態圖紅底換黑（找不到紅底會報錯退出） |
 | `.claude/skills/led-control/SKILL.md` | 技能說明（含 App 反編譯結果） |
@@ -70,7 +71,7 @@ https://self-study-junior.github.io/Led_Control/ 。連線、開關、亮度、�
 ## 待驗證（使用者還沒回報）
 
 2. ~~插播一次（內建動畫 6 版）~~ ✔ 11/08 14:41 成功（n＝1）。斷線重連 `backToPrograms` 保留為手動備援
-2d. **slow_car.gif 卡頓修正**：實機影片顯示小車進場時卡住約 3 秒再跳過一段。原檔是 PIL 存的（每格局部色表、只存變動區塊、小車段 8 色）。已改用 `tools/gifenc.py`（全域色表、每格完整畫面，同網頁 encodeGIF 格式），畫面逐格與舊檔相同（只改編碼）。⚠️待實測；若仍卡，下一步減少小車顏色
+2d. ~~slow_car.gif 卡頓~~ ✔ 11/08 14:44 改用 `tools/gifenc.py`（全域色表、完整畫面）後完整播放（n＝1）。marquee_taoyuan、keep_distance_anim 也已改用 gifenc 重存（逐格相同）。製圖規範寫在 SKILL.md「製圖規範」
 2a. ~~退出指令 04 00 01 01~~ ✖ 11/08 13:23：持續顯示後送出，裝置**沒有回應**，使用者隨即改按「回到節目輪播」（推定 LED 未回輪播，n＝1）；按鈕已移除
 2b. ~~自訂遙控鍵（未登記）~~ ✖ 11/08 不行
 2c. ~~自訂遙控鍵（先登記 08 80 111～119）~~ ✖ 11/08 13:18 實測仍播內建；已還原清單 1～5、刪 111。**結論：汽車版 20 鍵無法自訂**（兩種方法、各 n＝1），測試 UI 已移除（程式在 commit c36b12a）

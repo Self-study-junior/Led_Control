@@ -27,7 +27,7 @@ strip=Image.new("RGB",(tw,H),BLACK); x=0
 for p in parts: strip.paste(p,(x,0)); x+=p.width
 full=Image.new("RGB",(tw+W,H),BLACK); full.paste(strip,(W,0))
 frames=[full.crop((o,0,o+W,H)) for o in range(0,tw,2)]
-pal=[f.convert("P",palette=Image.ADAPTIVE,colors=8) for f in frames]
-pal[0].save("gallery/marquee_taoyuan.gif",save_all=True,append_images=pal[1:],duration=90,loop=0,optimize=False,disposal=1)
+import sys; sys.path.insert(0,"tools"); import gifenc
+gifenc.save(frames,90,"gallery/marquee_taoyuan.gif")   # 全域色表、完整畫面（見 SKILL.md 製圖規範）
 strip.resize((tw*8,H*8),Image.NEAREST).save("strip_preview.png")
 print(tw,len(frames))
