@@ -57,7 +57,7 @@ small{color:var(--mut)}
 
 <section>
   <h2>2. 單次插播</h2>
-  <small>按「插播」：送出那張圖（不存）→ 動態圖跑完一次、靜態圖顯示下面秒數 → 自動送內建動畫 6（微笑）→ 微笑播完 LED 自己回節目輪播。（回輪播這一步未實測）</small>
+  <small>按「插播」：送出那張圖（不存）→ 動態圖跑完一次、靜態圖顯示下面秒數 → 自動送內建動畫 20（危險警示）→ 播完 LED 自己回節目輪播。</small>
   <div id="insList" style="margin-top:6px"></div>
   <div class="row">
     <button class="sec" id="insAdd">＋ 新增一組</button>
@@ -535,15 +535,15 @@ function gifSpeed(src, factor){
   return {bytes:b, n, total, from:[...from].join("/"), to:[...to].join("/")};
 }
 const NOTE={keep:"持續顯示：LED 一直播這張，直到送別的東西或用節目表「顯示」切回。不會存。",
-  once:"插播一次：送出顯示 → 播完一輪（GIF 依檔案長度；靜態圖依右邊秒數）→ 自動送內建動畫 6（微笑），微笑播完 LED 回節目輪播。播完前請不要關掉這頁或手機螢幕。",
+  once:"插播一次：送出顯示 → 播完一輪（GIF 依檔案長度；靜態圖依右邊秒數）→ 自動送內建動畫 20（危險警示），播完 LED 回節目輪播。播完前請不要關掉這頁或手機螢幕。",
   save:"存成節目：寫進裝置記憶體，成功後自動記到「節目表」（預設填第一個空格）。iPixel App 看不到網頁存的節目。"};
 function bindMode(pre){ const f=()=>{ const m=$(pre+"Mode").value; $(pre+"SlotL").style.display=m==="save"?"":"none";
   $(pre+"OnceL").style.display=m==="once"?"":"none"; $(pre+"Note").textContent=NOTE[m]; }; $(pre+"Mode").onchange=f; f(); }
 bindMode("t"); bindMode("g");
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 let onceToken=0;
-const BACK_KEY=6;   // 內建動畫 6＝微笑；播完韌體自動回節目輪播
-// 插播一次：slot 0 送出 → 等一輪 → 送內建動畫 6 → 韌體播完回節目輪播
+const BACK_KEY=20;  // 內建動畫 20＝危險警示（11/08 使用者指定，原為 6 微笑）；播完韌體自動回節目輪播
+// 插播一次：slot 0 送出 → 等一輪 → 送內建動畫 BACK_KEY → 韌體播完回節目輪播
 async function insertOnce(o, staticSec){
   const ms=Math.round(o.durMs>0 ? o.durMs : staticSec*1000);
   log(`${o.name}：插播一次（約 ${(ms/1000).toFixed(1)} 秒）`);
