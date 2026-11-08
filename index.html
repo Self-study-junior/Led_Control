@@ -140,10 +140,6 @@ small{color:var(--mut)}
     <button class="sec act" id="bBack" disabled>回到節目輪播（斷線重連）</button>
     <small>LED 停在持續顯示／插播內容時，按這個讓它回到輪播</small>
   </div>
-  <div class="row">
-    <button class="sec act" id="bExit" disabled>測試：退出即時模式（04 00 01 01）</button>
-    <small>App 離開投影／遊戲時送的指令；成功＝回輪播且沒有連線圖示</small>
-  </div>
 </section>
 
 <section>
@@ -549,7 +545,6 @@ async function deliver(pre, o){  // o:{bytes,isGif,name,durMs}
     else log(`第 ${slot} 格傳送沒確認成功，未寫入紀錄（裝置上可能是舊的或半截資料）`,"bad");
     return ok;
   }
-  if(mode==="keep") log(`${o.name}：持續顯示（不存）`);
   if(mode==="once"){
     const list=Object.keys(progs).map(Number).filter(n=>n>=1&&n<=255).sort((a,b)=>a-b);
     const ms=Math.round(o.durMs>0 ? o.durMs : (+$(pre+"OnceS").value||5)*1000);
@@ -562,7 +557,7 @@ async function deliver(pre, o){  // o:{bytes,isGif,name,durMs}
     if(!wr){ log("插播結束時藍牙已斷線；LED 不會自己回輪播，正在重連…"); return await backToPrograms(); }
     return await backToPrograms();
   }
-  log(`${o.name}：持續顯示`);
+  log(`${o.name}：持續顯示（不存；要回輪播請按「回到節目輪播」）`);
   return await sendFile(o.bytes,o.isGif,0);
 }
 $("bShow").onclick=()=>{ const n=Math.max(1,Math.min(255,+$("showN").value|0)); sendCmd("顯示第 "+n+" 格",[7,0,8,0x80,1,0,n]); };
@@ -689,9 +684,7 @@ $("bClearLog").onclick=()=>{
 // ===== 回到節目輪播 =====
 $("bBack").onclick=()=>backToPrograms();
 
-// ===== 測試：退出即時模式（App 的 sendExitCmd）=====
-$("bExit").onclick=async()=>{ log("測試退出指令：LED 應從插播／持續顯示回到節目輪播，且不出現連線圖示");
-  const r=await sendCmd("退出即時模式",[4,0,1,1]); if(r!==null) log("已送出，請看 LED 並回報"); };
+// 退出指令 04 00 01 01（App sendExitCmd）11/08 實測：裝置不回應、LED 不回輪播，已移除
 
 // 自訂遙控鍵測試（第 110+k 格、登記 111～119）11/08 實測兩種都不行，已移除；程式見 git 歷史 c36b12a
 </script>
