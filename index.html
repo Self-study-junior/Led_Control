@@ -137,7 +137,7 @@ small{color:var(--mut)}
     <small>空格的話裝置會輪播現有節目</small>
   </div>
   <div class="row">
-    <button class="sec act" id="bBack" disabled>回到節目輪播（斷開藍牙）</button>
+    <button class="sec act" id="bBack" disabled>回到節目輪播（斷線重連）</button>
     <small>LED 停在持續顯示／插播內容時，按這個讓它回到輪播</small>
   </div>
 </section>
@@ -317,17 +317,19 @@ async function openGatt(){
   await nt.startNotifications(); nt.addEventListener("characteristicvaluechanged", onNotify);
   setConn(true); connMsg("已連線","ok");
 }
-// 11/08 實測：斷開藍牙後 LED 從 slot 0 內容回到節目輪播（08 80 清單、顯示空格、關開機都無效）。
-// 重連時 LED 會顯示連線圖示，所以只斷線、進待命，等下次送出時才自動重連。
+// 11/08 實測：slot 0 內容會一直停住；只斷線不夠（n＝1），斷線＋重連才回節目輪播（n＝3）。
+// 重連時 LED 會短暫顯示連線圖示，這是韌體行為，目前無法避免。重連失敗時進待命，下次送出再自動連。
 async function backToPrograms(){
   if(!dev) { log("✖ 還沒選過裝置","bad"); return false; }
   quietDisc=true;
   try{
-    log("斷開藍牙，讓 LED 回到節目輪播…");
+    log("斷開藍牙再重連，讓 LED 回到節目輪播（會短暫顯示連線圖示）…");
     try{ dev.gatt.disconnect(); }catch(e){}
     wr=null; standby=true; setConn(false);
-    await sleep(300);
-    log("✔ 已斷開；LED 應回到節目輪播。下次送出時會自動重新連線","ok"); return true;
+    await sleep(1500);
+    try{ await openGatt(); }
+    catch(e){ log("✖ 自動重連失敗："+errMsg(e)+"。LED 可能還停在插播內容；下次送出時會再自動連線，或按「連線 LED」","bad"); return false; }
+    log("✔ 已斷線重連，LED 應回到節目輪播","ok"); return true;
   }finally{ quietDisc=false; }
 }
 async function connect(all){
@@ -550,10 +552,10 @@ async function deliver(pre, o){  // o:{bytes,isGif,name,durMs}
     log(`${o.name}：插播一次（約 ${(ms/1000).toFixed(1)} 秒）`);
     const ok=await sendFile(o.bytes,o.isGif,0); if(!ok){ log("✖ 插播沒送成功，不切換","bad"); return false; }
     const my=++onceToken;
-    log(`插播中… ${(ms/1000).toFixed(1)} 秒後斷開藍牙，讓 LED 回到節目輪播`);
+    log(`插播中… ${(ms/1000).toFixed(1)} 秒後斷線重連，讓 LED 回到節目輪播`);
     await sleep(ms);
     if(my!==onceToken){ log("插播期間又送了別的插播，這次不切回（以最後一次為準）"); return true; }
-    if(!wr){ log("插播結束時藍牙已經斷開；LED 應已回到節目輪播"); return true; }
+    if(!wr){ log("插播結束時藍牙已斷線；LED 不會自己回輪播，正在重連…"); return await backToPrograms(); }
     return await backToPrograms();
   }
   log(`${o.name}：持續顯示`);
