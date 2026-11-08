@@ -71,6 +71,11 @@ small{color:var(--mut)}
       <button class="sec act" id="ckPress" disabled>② 按這個鍵</button>
       <button class="sec act" id="ckDel" disabled>③ 刪除測試圖</button>
     </div>
+    <div class="row">
+      <button class="sec act" id="ckReg" disabled>④ 登記 111～119 為遙控格（照商店版）</button>
+      <button class="sec act" id="ckRestore" disabled>⑤ 還原：清單設回節目表＋刪 111</button>
+    </div>
+    <small>登記測試順序：①寫入 → ④登記 → ②按鍵 1 → 看結果 → ⑤還原。④會動到播放清單，⑤一定要按。</small>
     <small>判準：按②（或實體遙控器同一鍵）出現紅框「KEY k」＝可以自訂；仍是內建英文動畫＝不行。測完一定按③，免得測試圖混進節目輪播。</small>
   </div>
 </section>
@@ -734,6 +739,24 @@ $("ckPress").onclick=async()=>{ const k=Math.max(1,Math.min(20,+$("ckKey").value
 $("ckDel").onclick=async()=>{ const slot=ckSlotOf();
   const r=await sendCmd(`刪除第 ${slot} 格`,[7,0,2,1,1,0,slot]);
   if(r) log(`已送出刪除第 ${slot} 格（裝置回 ${hex(r)}）`,"ok"); };
+
+// ===== 測試：照商店版先登記遙控格（BusinessControlModel.autoSendChannel：08 80 清單 111～119）=====
+$("ckReg").onclick=async()=>{
+  const list=[111,112,113,114,115,116,117,118,119], N=list.length;
+  log("登記測試：送 08 80 清單 111～119（商店版遙控器存圖前的步驟）；接著按②鍵 1");
+  const r=await sendCmd("登記遙控格 111～119",[6+N,0,8,0x80,N,0,...list]);
+  if(r) log("已登記（裝置回 "+hex(r)+"）。現在按②或實體遙控器第 1 鍵：紅框 KEY 1 TEST＝可自訂","ok");
+};
+$("ckRestore").onclick=async()=>{
+  const list=Object.keys(progs).map(Number).filter(n=>n>=1&&n<=110).sort((a,b)=>a-b);
+  if(!list.length){ log("✖ 節目表沒有紀錄，不知道要還原成哪些格；請先在節目表補登現有節目再按","bad"); return; }
+  const N=list.length;
+  log("還原：播放清單設回 "+list.join("、")+"，並刪除第 111 格");
+  const r1=await sendCmd("播放清單設回節目表",[6+N,0,8,0x80,N,0,...list]);
+  const r2=await sendCmd("刪除第 111 格",[7,0,2,1,1,0,111]);
+  if(r1&&r2) log("✔ 已還原。若輪播異常，斷電重開確認；仍異常就重新存節目","ok");
+  else log("✖ 還原有一步沒收到回應，請斷電重開確認輪播","bad");
+};
 </script>
 </body>
 </html>
