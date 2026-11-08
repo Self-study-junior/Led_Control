@@ -59,6 +59,20 @@ small{color:var(--mut)}
   <h2>遙控器（虛擬按鍵）</h2>
   <small>等同按實體遙控器：插播 LED 內建動畫，播完接回節目輪播。送的語言碼固定 0（英文），不會像 App 一樣改回簡體。（未實測）</small>
   <div id="rc" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px"></div>
+  <div style="border-top:1px solid #444;margin-top:10px;padding-top:8px">
+    <b>測試：自訂遙控鍵</b>
+    <small>（推測：第 k 鍵會先找第 110+k 格；商店版遙控器就是這樣存的）</small>
+    <div class="row">
+      <label>鍵 <input type="number" id="ckKey" value="1" min="1" max="20" style="width:56px"></label>
+      <span>→ 第 <b id="ckSlot">111</b> 格</span>
+    </div>
+    <div class="row">
+      <button class="sec act" id="ckWrite" disabled>① 寫入測試圖</button>
+      <button class="sec act" id="ckPress" disabled>② 按這個鍵</button>
+      <button class="sec act" id="ckDel" disabled>③ 刪除測試圖</button>
+    </div>
+    <small>判準：按②（或實體遙控器同一鍵）出現紅框「KEY k」＝可以自訂；仍是內建英文動畫＝不行。測完一定按③，免得測試圖混進節目輪播。</small>
+  </div>
 </section>
 
 <section>
@@ -139,6 +153,10 @@ small{color:var(--mut)}
   <div class="row">
     <button class="sec act" id="bBack" disabled>回到節目輪播（斷線重連）</button>
     <small>LED 停在持續顯示／插播內容時，按這個讓它回到輪播</small>
+  </div>
+  <div class="row">
+    <button class="sec act" id="bExit" disabled>測試：退出即時模式（04 00 01 01）</button>
+    <small>App 離開投影／遊戲時送的指令；成功＝回輪播且沒有連線圖示</small>
   </div>
 </section>
 
@@ -684,6 +702,38 @@ $("bClearLog").onclick=()=>{
 
 // ===== 回到節目輪播 =====
 $("bBack").onclick=()=>backToPrograms();
+
+// ===== 測試：退出即時模式（App 的 sendExitCmd）=====
+$("bExit").onclick=async()=>{ log("測試退出指令：LED 應從插播／持續顯示回到節目輪播，且不出現連線圖示");
+  const r=await sendCmd("退出即時模式",[4,0,1,1]); if(r!==null) log("已送出，請看 LED 並回報"); };
+
+// ===== 測試：自訂遙控鍵（第 k 鍵 ↔ 第 110+k 格）=====
+const ckSlotOf=()=>110+Math.max(1,Math.min(20,+$("ckKey").value|0));
+$("ckKey").oninput=()=>{ $("ckSlot").textContent=ckSlotOf(); };
+function ckImage(k){
+  const c=document.createElement("canvas"); c.width=W; c.height=H; const x=c.getContext("2d");
+  x.fillStyle="#000"; x.fillRect(0,0,W,H);
+  x.fillStyle="#ff0000"; x.fillRect(0,0,W,1); x.fillRect(0,H-1,W,1); x.fillRect(0,0,1,H); x.fillRect(W-1,0,1,H);
+  x.font="bold 13px sans-serif"; x.textBaseline="middle"; x.textAlign="center";
+  const t="KEY "+k+" TEST"; x.fillStyle="#fff"; x.fillText(t,W/2,H/2+1);
+  // 二值化（LED 不吃灰階）
+  const d=x.getImageData(0,0,W,H); for(let i=0;i<d.data.length;i+=4){ const v=Math.max(d.data[i],d.data[i+1],d.data[i+2]);
+    if(d.data[i]===255&&d.data[i+1]===0) continue; const on=v>=128; d.data[i]=d.data[i+1]=d.data[i+2]=on?255:0; d.data[i+3]=255; }
+  x.putImageData(d,0,0); return c;
+}
+$("ckWrite").onclick=async()=>{ try{
+  const k=Math.max(1,Math.min(20,+$("ckKey").value|0)), slot=110+k;
+  const c=ckImage(k); const png=new Uint8Array(await (await new Promise(r=>c.toBlob(r,"image/png"))).arrayBuffer());
+  log(`自訂遙控鍵測試：寫入「KEY ${k} TEST」到第 ${slot} 格`);
+  const ok=await sendFile(png,false,slot);
+  if(ok) log(`✔ 已寫入第 ${slot} 格。現在按②或實體遙控器第 ${k} 鍵`,"ok");
+}catch(e){ log("✖ 測試圖寫入失敗："+errMsg(e),"bad"); } };
+$("ckPress").onclick=async()=>{ const k=Math.max(1,Math.min(20,+$("ckKey").value|0));
+  const ok=await sendCmd(`遙控鍵 ${k}（測試）`,[6,0,7,0x80,k,0],false);
+  if(ok) log(`已送出鍵 ${k}：紅框 KEY ${k} TEST＝可自訂；內建英文動畫＝不行`); };
+$("ckDel").onclick=async()=>{ const slot=ckSlotOf();
+  const r=await sendCmd(`刪除第 ${slot} 格`,[7,0,2,1,1,0,slot]);
+  if(r) log(`已送出刪除第 ${slot} 格（裝置回 ${hex(r)}）`,"ok"); };
 </script>
 </body>
 </html>
