@@ -125,7 +125,16 @@ small{color:var(--mut)}
       </select></label>
   </div>
   <div id="gal"></div>
-  <small>要新增圖庫項目，把 96×16 的 GIF／PNG 放進 gallery/ 並登記到 gallery.json。</small>
+  <div style="border-top:1px solid #444;margin-top:10px;padding-top:8px">
+    <b>我的圖庫（這支手機）</b> <small>上傳的圖存在這支手機的 Bluefy；換手機或清除網站資料會不見，請定期匯出</small>
+    <div id="myGal"></div>
+    <div class="row">
+      <button class="sec" id="bMyExp">匯出我的圖庫</button>
+      <button class="sec" id="bMyImp">匯入</button>
+      <input type="file" id="myImpFile" accept=".json,application/json" style="display:none">
+      <small id="myInfo"></small>
+    </div>
+  </div>
 </section>
 
 <section>
@@ -161,7 +170,19 @@ small{color:var(--mut)}
   </div>
   <canvas id="pv2" class="pv" width="96" height="16"></canvas>
   <small id="info2">GIF 會原檔送出，請先做成 96×16。</small>
+  <div class="row">
+    <label>送出方式
+      <select id="pMode"><option value="keep">持續顯示（不存）</option><option value="once">插播一次（播完回節目輪播）</option><option value="save">存成節目</option></select></label>
+    <label id="pSlotL" style="display:none">存到第 <input type="number" id="pSlot" value="1" min="1" max="255" style="width:62px"> 格</label>
+    <label id="pOnceL" style="display:none">靜態圖插播 <input type="number" id="pOnceS" value="5" min="1" max="600" style="width:62px"> 秒</label>
+  </div>
+  <small id="pNote"></small>
   <div class="row"><button id="bSendImg" class="act" disabled>送到 LED</button></div>
+  <div class="row">
+    <label>名稱 <input type="text" id="myName" placeholder="例：我的標語" style="width:150px"></label>
+    <button id="bMySave" class="sec">存到我的圖庫（這支手機）</button>
+  </div>
+  <small>存進「我的圖庫」後，可在圖庫區直接送出，也能選進單次插播。</small>
 </section>
 
 <section>
@@ -483,6 +504,30 @@ $("bSendText").onclick=async()=>{ try{
 $("bDl").onclick=()=>{ const g=makeText(); const a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob([g],{type:"image/gif"})); a.download="led_96x16.gif"; a.click(); };
 
+// ===== GIF 檢查（製圖規範：96×16、全域色表、每格完整畫面、≤8 色）=====
+function gifCheck(b){
+  const r={w:b[6]|(b[7]<<8),h:b[8]|(b[9]<<8),gct:0,frames:0,partial:0,lct:0,warn:[]};
+  try{
+    let p=13; const f=b[10]; if(f&0x80){ r.gct=1<<((f&7)+1); p+=3*r.gct; }
+    const skip=()=>{ while(true){ const n=b[p++]; if(n===0||n===undefined) return; p+=n; } };
+    while(p<b.length){ const t=b[p++];
+      if(t===0x3B) break;
+      if(t===0x21){ p++; skip(); }
+      else if(t===0x2C){ const fw=b[p+4]|(b[p+5]<<8), fh=b[p+6]|(b[p+7]<<8), lf=b[p+8]; p+=9;
+        r.frames++; if(fw!==r.w||fh!==r.h) r.partial++; if(lf&0x80){ r.lct++; p+=3*(1<<((lf&7)+1)); } p++; skip(); }
+      else { r.warn.push("GIF 結構不認得"); break; } }
+  }catch(e){ r.warn.push("GIF 檢查失敗："+errMsg(e)); }
+  if(r.w!==W||r.h!==H) r.warn.push(`尺寸 ${r.w}×${r.h} 不是 96×16，LED 上可能被裁或變形`);
+  if(r.lct) r.warn.push(`${r.lct} 格帶局部色表`);
+  if(r.partial) r.warn.push(`${r.partial} 格只存部分畫面`);
+  if(r.gct>8) r.warn.push(`色表 ${r.gct} 色（建議 ≤8）`);
+  if((r.lct||r.partial)&&r.frames>1) r.warn.push("這種存法在實機曾卡頓跳格（11/08），建議用網頁跑馬燈或請 Claude 照製圖規範重做");
+  return r;
+}
+function gifDurMs(bytes,isGif){ if(!isGif) return 0; try{ const r=gifSpeed(bytes,1); return r.n>1?r.total:0; }catch(e){ return 0; } }
+const toB64=u8=>{ let s=""; for(let i=0;i<u8.length;i+=0x8000) s+=String.fromCharCode(...u8.subarray(i,i+0x8000)); return btoa(s); };
+const fromB64=b=>Uint8Array.from(atob(b),c=>c.charCodeAt(0));
+
 // ===== 圖片 =====
 let imgBytes=null, imgIsGif=false;
 $("file").onchange=async e=>{
@@ -495,8 +540,10 @@ $("file").onchange=async e=>{
   if(imgIsGif){
     const gw=buf[6]|(buf[7]<<8), gh=buf[8]|(buf[9]<<8);
     ctx.drawImage(bmp,0,0,W,H); imgBytes=buf;
-    $("info2").textContent=`GIF ${gw}×${gh}，${(buf.length/1024).toFixed(1)} KB，原檔送出`+(gw!==W||gh!==H?"（尺寸不是 96×16，LED 上可能會被裁或變形）":"");
-    $("info2").className=(gw!==W||gh!==H)?"bad":"";
+    const ck=gifCheck(buf);
+    $("info2").textContent=`GIF ${gw}×${gh}，${ck.frames} 格，${(buf.length/1024).toFixed(1)} KB，原檔送出`+(ck.warn.length?"。⚠️ "+ck.warn.join("；"):"。格式符合製圖規範");
+    $("info2").className=ck.warn.length?"bad":"";
+    if(ck.warn.length) log("上傳的 GIF 有疑慮："+ck.warn.join("；"),"bad");
   } else {
     const mode=$("fit").value; let dw=W,dh=H,dx=0,dy=0;
     if(mode!=="stretch"){ const s = mode==="fit"?Math.min(W/bmp.width,H/bmp.height):Math.max(W/bmp.width,H/bmp.height);
@@ -507,8 +554,10 @@ $("file").onchange=async e=>{
   }
 };
 $("fit").onchange=()=>{ if($("file").files[0]) $("file").onchange({target:$("file")}); };
-$("bSendImg").onclick=()=>{ if(!imgBytes) return log("先選一張圖","bad");
-  log("自訂圖片："+($("file").files[0]?.name||"(未命名)")+"：持續顯示（不存）"); sendFile(imgBytes,imgIsGif); };
+$("bSendImg").onclick=async()=>{ if(!imgBytes) return log("先選一張圖","bad");
+  try{ await deliver("p",{bytes:imgBytes,isGif:imgIsGif,name:"自訂："+($("myName").value.trim()||$("file").files[0]?.name||"圖片"),durMs:gifDurMs(imgBytes,imgIsGif)}); }
+  catch(e){ log("✖ 送出失敗："+errMsg(e),"bad"); }
+};
 
 // ===== GIF 速度：沿著 GIF 區塊結構改每格的 Graphic Control Extension 延遲（不重新編碼像素）=====
 function gifSpeed(src, factor){
@@ -539,7 +588,7 @@ const NOTE={keep:"持續顯示：LED 一直播這張，直到送別的東西或�
   save:"存成節目：寫進裝置記憶體，成功後自動記到「節目表」（預設填第一個空格）。iPixel App 看不到網頁存的節目。"};
 function bindMode(pre){ const f=()=>{ const m=$(pre+"Mode").value; $(pre+"SlotL").style.display=m==="save"?"":"none";
   $(pre+"OnceL").style.display=m==="once"?"":"none"; $(pre+"Note").textContent=NOTE[m]; }; $(pre+"Mode").onchange=f; f(); }
-bindMode("t"); bindMode("g");
+bindMode("t"); bindMode("g"); bindMode("p");
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 let onceToken=0;
 const BACK_KEY=20;  // 內建動畫 20＝危險警示（11/08 使用者指定，原為 6 微笑）；播完韌體自動回節目輪播
@@ -613,7 +662,7 @@ function renderProgs(){
     box.appendChild(d);
   }
   setBusy(false);
-  $("gSlot").value=nextFree();
+  $("gSlot").value=$("tSlot").value=$("pSlot").value=nextFree();
 }
 $("bManual").onclick=()=>{
   const n=Math.max(1,Math.min(255,+$("mSlot").value|0)), nm=$("mName").value.trim();
@@ -680,29 +729,91 @@ let INS=null;
 try{ INS=JSON.parse(localStorage.getItem(IKEY)||"null"); }catch(e){ INS=null; }
 if(!Array.isArray(INS)||!INS.length) INS=[{file:"slow_car.gif"}];   // 預設 01＝圖庫 7
 function saveIns(){ try{ localStorage.setItem(IKEY,JSON.stringify(INS)); }catch(e){ log("✖ 插播設定沒存成功："+errMsg(e),"bad"); } }
+function insSources(){
+  return GAL.map((g,k)=>({key:"g:"+g.file,label:(k+1)+". "+g.name,url:"gallery/"+g.file,load:()=>loadGal(g,1)}))
+    .concat(MY.map((m,k)=>({key:"m:"+m.id,label:"我 "+(k+1)+". "+m.name,url:myUrl(m),load:async()=>myLoad(m)})));
+}
+const insKey=x=>x.my?"m:"+x.my:"g:"+x.file;
 function renderIns(){
-  const box=$("insList"); box.textContent="";
+  const box=$("insList"); box.textContent=""; const src=insSources();
+  if(!src.length){ box.textContent="圖庫還沒載入"; return; }
   INS.forEach((x,i)=>{
+    const no=String(i+1).padStart(2,"0");
     const d=document.createElement("div"); d.className="gi";
-    const opts=GAL.map((g,k)=>`<option value="${k}">${k+1}. ${g.name.replace(/[<&]/g,"")}</option>`).join("");
-    d.innerHTML=`<b style="width:26px">${String(i+1).padStart(2,"0")}</b><img alt="" style="width:34%"><select style="flex:1;min-width:0"></select>`+
+    d.innerHTML=`<b style="width:26px">${no}</b><img alt="" style="width:34%"><select style="flex:1;min-width:0"></select>`+
       `<button class="act" ${wr||standby?"":"disabled"}>插播</button><button class="sec" title="刪除">✕</button>`;
-    const sel=d.querySelector("select"); sel.innerHTML=opts;
-    let k=GAL.findIndex(g=>g.file===x.file);
-    if(k<0){ k=0; log(`插播 ${String(i+1).padStart(2,"0")} 原本的圖「${x.file}」不在圖庫裡，改成第 1 張`,"bad"); x.file=GAL[0]?.file; saveIns(); }
-    sel.value=k; d.querySelector("img").src="gallery/"+GAL[k].file;
-    sel.onchange=()=>{ x.file=GAL[+sel.value].file; d.querySelector("img").src="gallery/"+x.file; saveIns(); };
+    const sel=d.querySelector("select");
+    src.forEach(o=>{ const op=document.createElement("option"); op.value=o.key; op.textContent=o.label; sel.appendChild(op); });
+    let k=src.findIndex(o=>o.key===insKey(x));
+    if(k<0){ log(`插播 ${no} 原本的圖不在圖庫或我的圖庫裡（可能被刪了），改成第 1 張`,"bad"); k=0; }
+    const setTo=o=>{ if(o.key.startsWith("m:")){ x.my=o.key.slice(2); delete x.file; } else { x.file=o.key.slice(2); delete x.my; } d.querySelector("img").src=o.url; };
+    sel.value=src[k].key; setTo(src[k]); saveIns();
+    sel.onchange=()=>{ setTo(src.find(o=>o.key===sel.value)); saveIns(); };
     const [bGo,bDel]=d.querySelectorAll("button");
-    bGo.onclick=async()=>{ try{ const it=GAL[+sel.value]; log(`插播 ${String(i+1).padStart(2,"0")}：`+it.name);
-      await insertOnce(await loadGal(it,1), +$("insSec").value||5); }catch(e){ log("✖ 插播失敗："+errMsg(e),"bad"); } };
+    bGo.onclick=async()=>{ try{ const o=src.find(o=>o.key===sel.value); log(`插播 ${no}：`+o.label);
+      await insertOnce(await o.load(), +$("insSec").value||5); }catch(e){ log("✖ 插播失敗："+errMsg(e),"bad"); } };
     bDel.onclick=()=>{ if(INS.length===1){ log("至少要留一組插播","bad"); return; }
-      if(!confirm(`刪除插播 ${String(i+1).padStart(2,"0")}？`)) return; INS.splice(i,1); saveIns(); renderIns(); };
+      if(!confirm(`刪除插播 ${no}？`)) return; INS.splice(i,1); saveIns(); renderIns(); };
     box.appendChild(d);
   });
 }
 $("insAdd").onclick=()=>{ INS.push({file:GAL[0]?.file}); saveIns(); renderIns(); };
 
+// ===== 我的圖庫（localStorage；上傳的圖）=====
+const MKEY="ledMyGallery.v1";
+let MY=[];
+try{ MY=JSON.parse(localStorage.getItem(MKEY)||"[]"); if(!Array.isArray(MY)) MY=[]; }catch(e){ MY=[]; log("✖ 讀取我的圖庫失敗："+errMsg(e),"bad"); }
+function saveMy(){ try{ localStorage.setItem(MKEY,JSON.stringify(MY)); return true; }
+  catch(e){ log("✖ 我的圖庫沒存成功（手機空間可能不夠）："+errMsg(e)+"，請匯出備份後刪掉幾張","bad"); return false; } }
+const myUrl=m=>`data:${m.isGif?"image/gif":"image/png"};base64,${m.b64}`;
+function myLoad(m){ const b=fromB64(m.b64); return {bytes:b,isGif:m.isGif,name:"我的："+m.name,durMs:gifDurMs(b,m.isGif)}; }
+function renderMy(){
+  const box=$("myGal"); box.textContent="";
+  if(!MY.length){ box.innerHTML="<small>（還沒有。到「送自己的圖片」選圖後按「存到我的圖庫」）</small>"; }
+  MY.forEach((m,i)=>{
+    const d=document.createElement("div"); d.className="gi";
+    d.innerHTML=`<img alt=""><div class="nm"></div><button class="act" ${wr||standby?"":"disabled"}>送出</button><button class="sec" title="刪除">✕</button>`;
+    d.querySelector("img").src=myUrl(m); d.querySelector(".nm").textContent="我 "+(i+1)+". "+m.name;
+    const [bGo,bDel]=d.querySelectorAll("button");
+    bGo.onclick=async()=>{ try{ const o=myLoad(m); const sp=+$("gSpeed").value;
+        if(o.isGif&&sp!==1){ const r=gifSpeed(o.bytes,sp); o.bytes=r.bytes; o.durMs=r.n>1?r.total:0; o.name+=`（速度 ${Math.round(sp*100)}%）`; }
+        await deliver("g",o); }catch(e){ log("✖ 送出失敗："+errMsg(e),"bad"); } };
+    bDel.onclick=()=>{ if(!confirm(`從我的圖庫刪除「${m.name}」？（LED 上已存的節目不受影響）`)) return;
+      MY.splice(i,1); saveMy(); renderMy(); renderIns(); };
+    box.appendChild(d);
+  });
+  const kb=MY.reduce((a,m)=>a+m.b64.length,0)/1024;
+  $("myInfo").textContent=`${MY.length} 張，約 ${kb.toFixed(0)} KB`;
+}
+$("bMySave").onclick=()=>{
+  if(!imgBytes) return log("先在上面選一張圖","bad");
+  const name=$("myName").value.trim()||($("file").files[0]?.name||"圖片").replace(/\.[^.]+$/,"");
+  const m={id:"m"+Date.now().toString(36),name,isGif:imgIsGif,b64:toB64(imgBytes),at:tsNow()};
+  MY.push(m);
+  if(!saveMy()){ MY.pop(); return; }
+  log(`✔ 已存到我的圖庫：${name}（${(imgBytes.length/1024).toFixed(1)} KB）`,"ok"); renderMy(); renderIns();
+};
+$("bMyExp").onclick=()=>{
+  if(!MY.length) return log("我的圖庫是空的","bad");
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([JSON.stringify({v:1,items:MY})],{type:"application/json"}));
+  a.download="led_my_gallery_"+tsNow().replace(/[^0-9]/g,"").slice(0,12)+".json"; a.click();
+  log(`已匯出我的圖庫 ${MY.length} 張`,"ok");
+};
+$("bMyImp").onclick=()=>$("myImpFile").click();
+$("myImpFile").onchange=async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  try{ const j=JSON.parse(await f.text()); const items=(j&&j.items)||[];
+    let add=0, skip=0;
+    for(const m of items){ if(!m||!m.b64||!m.name){ skip++; continue; } if(MY.some(x=>x.id===m.id)){ skip++; continue; } MY.push(m); add++; }
+    if(add&&!saveMy()){ MY.splice(MY.length-add,add); return; }
+    log(`✔ 匯入 ${add} 張`+(skip?`，略過 ${skip} 張（重複或格式不對）`:""),"ok"); renderMy(); renderIns();
+  }catch(err){ log("✖ 匯入失敗："+errMsg(err),"bad"); }
+  e.target.value="";
+};
+
+
 renderProgs();
+renderMy();
 makeText();
 log("就緒。按「連線 LED」，在清單中選 LED_BLE_ 開頭的裝置。");
 
