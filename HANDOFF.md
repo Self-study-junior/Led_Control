@@ -30,6 +30,7 @@ https://self-study-junior.github.io/Led_Control/ 。連線、開關、亮度、�
 | `tools/make_keep_distance_anim.py` | 產生 `gallery/keep_distance_anim.gif`（4 格×2000 ms＝8 秒；A 字／B 》〉》《〈《 交替，雙眼固定） |
 | `tools/make_slow_car.py` | 產生 `gallery/slow_car.gif`（⚠ 前有慢車 🚗，請勿追尾閃燈 ⚠；241px 跑馬燈、90 ms、三角約 0.54 秒閃一次、一輪 15.2 秒） |
 | `tools/make_jokes.py` | 產生 `joke_distance.gif`（圖庫 8）、`joke_newbie.gif`（圖庫 9）幹話跑馬燈；4 色、gifenc 存 |
+| `tools/make_stick_fight.py` | 產生 `stick_fight.gif`（圖庫 10）：藍紅火柴人打架，98 格×100 ms＝9.8 秒，4 色；骨架關節座標＋Bresenham 畫線，劇本表 `S` 控制每段姿勢與位置 |
 | `tools/gifscan.py` | 檢查 GIF 結構（全域色表、全幅、局部色表、延遲） |
 | `tools/gifenc.py` | LED 友善 GIF 編碼器（全域色表、完整畫面）；新 GIF 一律用它，不要用 PIL save_all |
 | `tools/static_to_black.py` | 靜態圖紅底換黑（找不到紅底會報錯退出） |
